@@ -10,91 +10,55 @@ WORKFLOW.md (v0.3.4) 実行ログ
 
 ---
 
-## 実施内容
+## セッション1: ブートストラップ
 
-### ステップ1: WORKFLOW.md の存在確認
+### 実施内容
 
-- `WORKFLOW.md` (v0.3.4) が存在することを確認した。
+| ステップ | 内容 |
+|----------|------|
+| ディレクトリ生成 | `state/` `reviews/` `qa/` `logs/` を作成 |
+| state.json 生成 | v0.3.4 ベース。IMPLEMENTATION_PLAN.md を含む6成果物を登録 |
+| SPEC.md 認識 | ファイルが存在するため `status: drafted`、`next_action: review_artifact` で起動 |
+| ログ初期化 | `logs/workflow.log` に bootstrap イベントを記録 |
 
-### ステップ2: ブートストラップ判定
+### 問題・注意事項
 
-- `state/state.json` が存在しないことを確認した。
-- `workflow_version` との比較対象がないため、新規初期化として処理した。
-
-### ステップ3: 補助ディレクトリの生成
-
-以下のディレクトリを新規作成した。
-
-- `state/`
-- `reviews/`
-- `qa/`
-- `logs/`
-
-### ステップ4: 成果物定義の解決
-
-- `WORKFLOW.md` 末尾の `## Artifact Definitions` セクションを読み取った。
-- 有効化された成果物は以下の6件。
-
-| 成果物 | required |
-|--------|----------|
-| SPEC.md | true |
-| USECASE.md | true |
-| SEQUENCE.md | true |
-| CLASS.md | true |
-| TEST.md | true |
-| IMPLEMENTATION_PLAN.md | false |
-
-### ステップ5: `state/state.json` の初期生成
-
-- `state/state.json` を生成した。
-- `SPEC.md` はファイルが存在していたため、`status: drafted` として初期化した（`not_started` ではなく）。
-- 他の成果物はすべて `status: not_started`。
-- `next_action: review_artifact`（SPEC.md のレビューが未実施のため）。
-
-### ステップ6: 実行ログの初期化
-
-- `logs/workflow.log` を生成し、bootstrap イベントを記録した。
+| ID | 重大度 | 内容 | 状態 |
+|----|--------|------|------|
+| P-01 | Medium | SPEC.md の Section 15 コードブロック閉じ忘れ（Section 16〜18 がヘッダとして認識されない） | **解決済み**（ユーザーが SPEC.md を修正） |
+| P-02 | Low | `project_name` は仮置きの `"workflow"` | 未対応（案件名確定後に更新） |
 
 ---
 
-## 現在の状態
+## セッション2: SPEC.md レビュー
 
-```json
-{
-  "current_artifact": "SPEC.md",
-  "current_phase": "spec",
-  "next_action": "review_artifact"
-}
+### 実施内容
+
+| ステップ | 内容 |
+|----------|------|
+| state.json 読み込み | `current_artifact=SPEC.md`、`next_action=review_artifact` を確認 |
+| 実行モード判定 | `MODE_B`（Codex CLI 実行確認不可、単独レビュー方式） |
+| SPEC.md レビュー実行 | Reviewer A/B/C/D + Arbiter の5観点で実施 |
+| レビュー報告生成 | `reviews/SPEC_review.md` を作成 |
+| 質問ファイル生成 | `qa/SPEC_questions.md` を作成（2件） |
+| state.json 更新 | SPEC.md を `questions_pending`、`next_action=await_human_answer_approval` に更新 |
+
+### レビュー結果
+
+```
+Status: NEEDS_ANSWER
+Blocking: yes
+Next Action: answer_questions
 ```
 
----
+### 抽出された質問
 
-## 次のアクション
+| ID | 重大度 | 内容 |
+|----|--------|------|
+| Q-SPEC-01 | Medium | 削除機能（未購入品の削除・購入済み品の削除）は本バージョンのスコープ外か？ |
+| Q-SPEC-02 | Medium | 購入済み解除時に `checkedAt` を null にリセットするか？ |
 
-`SPEC.md` のレビューを実施する。
+### 次のアクション
 
----
-
-## 問題・注意事項
-
-### P-01 【Medium】SPEC.md のフォーマット崩れ（修正推奨）
-
-Section 15「想定ファイル構成」のコードブロックが閉じられていない（終端の ` ``` ` が欠落）。
-そのため Section 16〜18（受け入れ条件、将来拡張案、完了定義）が Markdown ヘッダ（`##`）として認識されず、コードブロックの本文として表示される状態になっている。
-
-レビューや機械処理には影響しないが、将来的にパーサーが SPEC.md を読む際に誤読するリスクがあるため、修正を推奨する。
-
-**該当箇所（SPEC.md 行287–299付近）**:
-
-```text
-└─ icons/
-   ├─ icon-192.png
-   └─ icon-512.png
-← ここに ``` が必要
-16. 受け入れ条件    ← ## がなく、ヘッダとして認識されない
-```
-
-### P-02 【Low】`project_name` は固定文字列を使用
-
-`project_name` はリポジトリルートフォルダ名 `workflow` を使用した。案件名・プロジェクト名が決まれば適宜更新すること。
+`qa/SPEC_questions.md` の Q-SPEC-01・Q-SPEC-02 に対して回答案を作成し、人間が承認後に `qa/SPEC_answers.md` を確定する。
 

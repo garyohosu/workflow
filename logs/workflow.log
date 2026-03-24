@@ -1,1 +1,3 @@
 {"timestamp":"2026-03-24T00:00:00Z","artifact":"__bootstrap__","step":"bootstrap","actor":"claude_code","command":"","output_file":"state/state.json","status":"completed","next_action":"review_artifact","execution_mode":"MODE_B","error":null}
+{"timestamp":"2026-03-24T00:10:00Z","artifact":"SPEC.md","step":"review","actor":"claude_code","command":"","output_file":"reviews/SPEC_review.md","status":"NEEDS_ANSWER","next_action":"await_human_answer_approval","execution_mode":"MODE_B","error":null}
+{"timestamp":"2026-03-24T00:10:01Z","artifact":"SPEC.md","step":"extract_questions","actor":"claude_code","command":"","output_file":"qa/SPEC_questions.md","status":"completed","next_action":"await_human_answer_approval","execution_mode":"MODE_B","error":null}
