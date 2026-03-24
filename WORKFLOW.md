@@ -1,957 +1,201 @@
-# WORKFLOW.md
+基本原則（簡略運用）
+このワークフローは、厳密な工程管理よりも、成果物を粗くでも前進させながら蓄積することを優先する。AI は軽微な不整合や文言の曖昧さでは停止せず、合理的な仮定を置いて進めてよい。停止は High の重大問題または Blocking: yes の場合に限定する。ワークフローの最小単位は next_action ではなく成果物であり、レビュー、改訂、再レビューは1成果物の内部ループとして自動処理する。
 
-## タイトル
-AI成果物レビュー駆動ワークフロー
 
-## バージョン
-0.3.5
+このワークフローは、厳密な工程管理よりも、成果物を前進させながら蓄積することを優先する。
 
-## ステータス
-Draft
+目的は、SPEC.md、USECASE.md、SEQUENCE.md、CLASS.md、TEST.md などの成果物と、そのレビュー結果、質問、回答、改訂結果を順番に残しながら前進することである。
 
----
+軽微な不整合、文言の揺れ、表現の曖昧さ、合理的に補完できる不足事項では停止しない。AI はもっとも単純で自然な解釈を採用し、必要なら仮定を置いて進めてよい。
 
-## 1. 概要
+停止は例外であり、通常動作ではない。明確な重大問題がない限り、AI は成果物の生成、レビュー、改訂、再レビュー、次成果物への進行を継続すること。
 
-本ドキュメントは、設計・レビュー・質問回答・改訂・承認・実装までを段階的に進めるためのワークフローを定義する。  
-目的は、AI駆動開発における「作ったが止まらない」「レビューしたが進めない」「不明点が会話の中に埋もれる」といった問題を防ぎ、成果物単位で状態を明確に管理しながら、機械的に次のアクションを判断できるようにすることである。
+このワークフローの最小単位は next_action ではなく成果物である。したがって、1つの成果物については、必要なレビューと軽微修正を内部的に繰り返し、その成果物が次へ進める状態になるまで自動で処理することを原則とする。
 
-本バージョンでは、**最初に `WORKFLOW.md` だけを配置すれば、システムが `state/state.json` を自動生成して起動できる**ことを前提にしている。  
-つまり、`WORKFLOW.md` は単なる説明書ではなく、**進行ルールと初期状態生成ルールを兼ねた起動定義ファイル**として扱う。
+────────────────
+追記案2: 実行モード定義の簡略化
+────────────────
 
-また本バージョンでは、レビュー実行方式として以下の 2 方式を正式に扱う。
+実行モード
 
-- **連携レビュー方式**: Claude Code から Codex CLI を呼び出せる場合に、複数AIまたは複数実行主体でレビューする方式
-- **単独レビュー方式**: 連携実行ができない場合に、単一AIが複数視点レビューを段階的に実施する方式
+本ワークフローの実行モードは、原則として以下の2種類とする。
 
-どちらの方式でも、**最終出力形式・状態遷移・承認条件は同一**とする。
+rough_auto
 
----
+通常運用モード。成果物を粗くでも前進させながら蓄積することを優先する。
 
-## 2. 目的
+AI は以下を自動で行ってよい。
+・成果物の生成
+・成果物のレビュー
+・軽微な質問への仮回答
+・軽微な指摘の自動修正
+・再レビュー
+・次成果物への進行
 
-このワークフローの目的は以下の通りである。
+Low および Medium の指摘や質問では原則停止しない。合理的な既定値または文脈上もっとも自然な解釈を採用して前進すること。
 
-- 人間の手作業によるコピペと進行管理を減らす
-- 成果物ごとのレビューと承認を強制する
-- 未解決事項が残っている状態で次工程へ進むことを防ぐ
-- 設計文書間の整合性を維持したまま実装へ進める
-- Claude Code、Codex CLI、別AI/API を役割分担して運用可能にする
-- Claude Code と Codex CLI の連携が不可能でも、単一AIで運用継続可能にする
-- `WORKFLOW.md` 単体から初期状態を再現できるようにする
+careful
 
----
+慎重運用モード。重大な不確定要素がある場合は停止してよい。ただし、Low の文言修正や明白な補完では停止しないこと。
 
-## 3. 基本原則
+デフォルトは rough_auto とする。
 
-本ワークフローは、以下の原則に従って動作する。
+────────────────
+追記案3: state.json テンプレート簡略化
+────────────────
 
-1. **原則として承認されるまで次工程へ進まない**
-   最新レビュー結果が `APPROVED` でない成果物は未完了とみなす。
-   ただし、`NEEDS_ANSWER` であっても `Blocking: no` かつ `Next Action: start_next_artifact` の場合は、補足質問を後続で解消する前提で例外的に次工程へ進んでよい。
-   この例外進行は一時先送りを意味し、先送りした成果物は実装フェーズへ入る前に必ず再訪して `APPROVED` まで回収する。
+state.json 追加フィールド
 
-2. **不明点は必ず質問として分離する**  
-   レビュー本文に埋め込まず、`qa/*_questions.md` に切り出す。
+state/state.json には少なくとも以下を持たせる。
 
-3. **回答は必ずファイルとして保存する**  
-   質問に対する判断は `qa/*_answers.md` として残し、改訂根拠を追跡可能にする。
+・run_mode
+・current_artifact
+・artifact_order
+・next_action
+・final_status
+・review_status
+・deferred_artifacts
+・revision_count
+・steps_executed
 
-4. **改訂後は必ず再レビューする**  
-   一度レビュー済みであっても、内容が変わった場合は再度レビューを行う。
+推奨初期値は以下とする。
 
-5. **状態は機械可読に管理する**  
-   現在地、未解決事項、次アクションは `state/state.json` で管理する。
+・run_mode: rough_auto
+・final_status: in_progress
+・deferred_artifacts: 空配列
+・steps_executed: 0
 
-6. **AI は High の未確定事項を推測で確定しない**
-   High の不足情報がある場合は質問として切り出し、勝手に埋めて進めない。
-   Medium / Low は原則11に従い AI 仮定で解決してよい。
+実行制御のための細かすぎるフラグは原則追加しない。複雑な制御より、前進を優先すること。
 
-7. **`state/state.json` が存在しない場合は `WORKFLOW.md` から初期生成する**  
-   起動時に `state/state.json` が無ければ、ブートストラップ処理を行う。
+────────────────
+追記案4: 自動進行ループの簡略版
+────────────────
 
-8. **役割は論理上の区分であり、物理的なAI数を固定しない**  
-   作成担当AI、レビュー担当AI、回答担当AIは論理上の役割を示す。  
-   実運用では、複数AIで分担してもよいし、単一AIが段階的に兼務してもよい。
+自動進行ループ（簡略版）
 
-9. **レビュー指摘は必ず採否判定を通す**  
-   レビュー結果をそのまま全採用せず、採用・保留・却下を明示する。
+AI は以下の流れで成果物を進めること。
 
-10. **好みより要件整合性を優先する**
-    レビューでは文体上の好みよりも、矛盾・未定義・運用不能・安全性・自動化困難性を優先して扱う。
+current_artifact を確認する
+成果物が未作成なら生成する
+レビューを実行する
+レビュー結果を保存する
+軽微な指摘や合理的に補完可能な質問は AI が自分で解決する
+必要なら回答ファイルを作成する
+成果物を改訂する
+再レビューする
+current_artifact が次へ進める状態になったら、次の成果物へ進む
+artifact_order の最後まで到達したら停止する
 
-11. **Non-blocking な未確定事項は AI が仮定を置いて先に進む**
-    `Blocking: no` と判定された質問（Medium / Low のみ）は、AI が合理的な仮定を置き `qa/*_answers.md` に記録して `revise_artifact` へ直接進んでよい。
-    仮定の内容は LOG.md に `AI-ASSUMPTION:` プレフィックスで記録する。仮定が後で覆された場合は `revise_artifact` でやり直す。
-    `await_human_answer_approval` へ進むのは `Blocking: yes`（High 質問あり）の場合のみとする。
+この流れにおいて、レビュー、改訂、再レビューは同一成果物の内部ループとして扱う。これらを1ステップごとに外部確認して停止してはならない。
 
----
+rough_auto では、1つの成果物が完了または先送り可能と判断されるまで、自動で内部ループを継続すること。
 
-## 4. 想定する役割分担
+────────────────
+追記案5: 停止条件の簡略化
+────────────────
 
-### 4.1 Claude Code
+停止条件
 
-Claude Code は主に作成・改訂・進行管理を担当する。
+AI は以下の場合のみ停止してよい。
 
-- 成果物の新規作成
-- 回答反映による成果物改訂
-- `state/state.json` を読んだ次アクション判定
-- 次工程への進行制御
-- 必要に応じた外部コマンド実行
-- `state/state.json` の初期生成
-- 必要に応じた Codex CLI 呼び出し
-
-### 4.2 Codex CLI
+・High の重大な未解決問題がある
+・Blocking: yes と判断される
+・必須入力が欠落している
+・仕様が根本的に矛盾しており、合理的な仮定では進められない
+・ファイルシステムや Git の回復不能エラーがある
+・全成果物の処理が完了した
 
-Codex CLI は主にレビューを担当する。
+以下では停止してはならない。
 
-- 成果物レビュー
-- 曖昧な記述、不足、矛盾の指摘
-- 実装可能性・テスト性・自動化前提での曖昧さの指摘
-- レビュー結果の判定
-- 必要に応じた質問一覧の抽出
+・Low の文言修正
+・Medium の軽微な曖昧さ
+・表現統一
+・明白な既定値で埋められる質問
+・再レビュー
+・次成果物への進行
+・軽微な Markdown 修正
+・既存成果物の小修正
 
-### 4.3 回答担当AI
+停止した場合は、その理由を LOG.md に記録すること。
 
-回答担当AIは、レビューで抽出された質問への回答案の作成を担当する。
+────────────────
+追記案6: Blocking の運用簡略化
+────────────────
 
-- 方針の明確化案の作成
-- 未確定事項の選択肢提示
-- 仕様分岐の選択案の作成
-- 改訂に必要な判断の文書化案の作成
-
-AIが作成した回答案は、人間が確認・承認して初めて `qa/*_answers.md` として確定する。
-AIが仕様判断を自律確定することは禁止する（原則6）。MODE_A（連携レビュー）でも回答ファイル生成は Claude Code が担当し、Codex CLI はレビュー専任とする。
+Blocking の扱い
 
-### 4.4 単一AI運用時の扱い
+Blocking は以下の2値のみを持つ。
 
-単一AIしか利用できない場合、上記の役割は**論理的な担当**として段階分離して扱う。  
-この場合でも、以下は分離しなければならない。
+・Blocking: yes
+・Blocking: no
 
-- 作成工程
-- レビュー工程
-- 質問抽出工程
-- 回答工程
-- 改訂工程
-- 採否判定工程
+rough_auto では、High の重大問題のみ原則 Blocking: yes とする。
+Low および Medium は原則 Blocking: no とする。
 
-単一AIが同一ターンまたは同一セッションで複数工程を兼務してもよいが、**レビュー工程では作成工程の結論を正しいと仮定してはならない**。
+Blocking: no は、AI が仮定または軽微修正で進行可能であることを意味する。この場合、質問や指摘をファイルとして残してよいが、進行は停止しない。
 
----
+Blocking: no により先送りした事項は deferred_artifacts または LOG.md に記録し、後続成果物の処理後または最終確認時に回収すればよい。
 
-## 5. 管理対象成果物
+────────────────
+追記案7: 回答ファイルと承認運用の簡略化
+────────────────
 
-本ワークフローで管理する主な成果物は以下とする。
+質問と回答の扱い
 
-- 必須成果物: `SPEC.md`, `USECASE.md`, `SEQUENCE.md`, `CLASS.md`, `TEST.md`
-- 任意成果物: `IMPLEMENTATION_PLAN.md` および案件固有で追加する設計文書
-- 実装コード
-- テストコード
-- レビュー報告
-- 質問ファイル
-- 回答ファイル
-- 実行ログ
-- `state/state.json`
+質問が発生した場合でも、Low または Medium の内容であり、AI がもっとも自然な解釈を置ける場合は、人間確認を待たずに AI が回答を作成してよい。
 
----
+回答ファイルは記録のために残してよいが、軽微な質問については人間承認を必須としない。
 
-## 6. 成果物の標準進行順
+人間承認が必須なのは、High の重大問題または Blocking: yes の場合のみとする。
 
-設計から実装までの標準的な進行順は以下とする。
+回答生成は停止条件ではなく、前進のための補助処理として扱うこと。
 
-1. `SPEC.md`
-2. `USECASE.md`
-3. `SEQUENCE.md`
-4. `CLASS.md`
-5. `TEST.md`
-6. 任意成果物（例: `IMPLEMENTATION_PLAN.md`）
-7. 実装
-8. 実装レビュー
-9. テスト実行
-10. 修正
-11. 最終完了判定
+────────────────
+追記案8: 成果物単位で止めるルール
+────────────────
 
-この順序は標準形であり、案件に応じて追加成果物を挿入してもよい。  
-ただし、依存関係を無視して後続成果物を先に進めてはならない。任意成果物は `WORKFLOW.md` の機械可読定義に列挙されたものだけを有効化する。
+成果物単位の完了判定
 
-### 6.1 機械可読な成果物定義
+AI は next_action 単位ではなく、成果物単位で進行すること。
 
-`WORKFLOW.md` を起動定義ファイルとして扱うため、成果物一覧は `## Artifact Definitions` 見出し直下の YAML ブロックで宣言する。
+ある成果物について、以下のいずれかになれば次の成果物へ進んでよい。
 
-````markdown
-## Artifact Definitions
+・APPROVED
+・Blocking: no で実質的に次工程へ進行可能
+・軽微な先送り事項のみが残っている
 
-```yaml
-artifacts:
-  - name: SPEC.md
-    required: true
-  - name: USECASE.md
-    required: true
-  - name: SEQUENCE.md
-    required: true
-  - name: CLASS.md
-    required: true
-  - name: TEST.md
-    required: true
-  - name: IMPLEMENTATION_PLAN.md
-    required: false
-```
-````
+この場合、レビュー結果、質問、回答、改訂結果を保存したうえで、次の成果物へ進むこと。
 
-ブートストラップ時は `## Artifact Definitions` セクションの定義を優先して `artifact_order` と `artifacts` を生成する。  
-定義が存在しない場合は、後方互換として `SPEC.md` `USECASE.md` `SEQUENCE.md` `CLASS.md` `TEST.md` の5成果物を標準定義として用いる。  
-任意成果物はこの定義に列挙したものだけを有効化し、列挙しない限り `IMPLEMENTATION_PLAN.md` も state には含めない。
+────────────────
+追記案9: 禁止事項の簡略版
+────────────────
 
----
+禁止事項
 
-## 7. 成果物単位の状態定義
+AI は以下を行ってはならない。
 
-各成果物は、少なくとも以下の状態を持つ。
+・Low や Medium の軽微な問題で毎回停止すること
+・レビュー、改訂、再レビューのたびに人間確認を求めること
+・ next_action 単位の細かすぎる停止を通常運用にすること
+・成果物より運用手順を重くすること
+・軽微な不整合を理由に前進を止めること
 
-- `not_started` まだ開始していない状態。
-- `drafted` 初版が作成された状態。
-- `reviewed` レビュー報告が作成された状態。
-- `questions_pending` 未回答質問が存在する状態。
-- `answers_draft_generated` 回答案ドラフトが生成済みの状態。
-- `awaiting_answer_approval` 人間の回答承認待ち状態。
-- `answers_completed` 質問への回答が作成済みの状態（人間承認済み）。
-- `needs_answer_revision` 回答案ドラフトが却下され、再作成が必要な状態。
-- `revised` 回答を反映して成果物を改訂した状態。
-- `approved` 最新レビュー結果が `APPROVED` の状態。
-- `blocked` 人間判断待ち、依存不足、重大矛盾などにより進行不能な状態。
+通常運用では、成果物を残しながら前進することを最優先とする。
 
-注: `review_requested`（非同期レビュー待機）は現バージョンでは使用しない。将来、非同期レビュー設計を導入する際に復活させる。
+────────────────
+追記案10: LOG.md 記録ルールの簡略版
+────────────────
 
----
+LOG.md 記録ルール
 
-## 8. レビュー実行方式
+LOG.md には少なくとも以下を記録すること。
 
-レビューは、実行環境に応じて以下のいずれかの方式で行う。
+・対象成果物
+・実施した処理
+・生成または更新したファイル
+・レビュー結果
+・置いた仮定
+・先送りした事項
+・停止理由（停止した場合のみ）
 
-### 8.1 連携レビュー方式
-
-Claude Code から Codex CLI を**実際に実行確認できる**場合、Claude Code と Codex CLI を別視点レビュアーとして用いる。
-この場合、少なくとも以下の観点を分担して実施する。
-
-- Claude Code 側: 文書整合性、状態遷移、前後成果物依存、進行破綻、質問抽出
-- Codex CLI 側: 実装可能性、テスト性、単純化余地、CLI/自動化前提での曖昧さ
-
-必要に応じて追加で以下を実施してよい。
-
-- 可読性レビュー
-- 保守性レビュー
-- 例外系レビュー
-- 自動実行安全性レビュー
-
-連携レビュー時は観点別のレビューファイルを個別に保存したうえで、必ず最終統合ファイルを1本生成する。
-`state/state.json` の `review_file` は統合ファイルのみを参照する。
-
-```text
-reviews/SPEC_review_claude.md    ← 観点別（保存）
-reviews/SPEC_review_codex.md     ← 観点別（保存）
-reviews/SPEC_review_arbiter.md   ← 観点別（保存）
-reviews/SPEC_review.md           ← 正式参照先（state が読む）
-```
-
-### 8.2 単独レビュー方式
-
-Claude Code から Codex CLI を呼び出せない場合、または環境判定ができない場合は、単一AIが複数視点レビューを段階的に実行する。  
-この場合、少なくとも以下の観点を独立して評価する。
-
-- Reviewer A: 仕様整合性レビュー
-- Reviewer B: 単純化・簡潔化レビュー
-- Reviewer C: 実装・運用レビュー
-- Reviewer D: 質問抽出レビュー
-- Arbiter: 指摘の採否判定
-
-### 8.3 実行モード判定規約
-
-レビュー開始前に、レビュー統括AIは必ず実行モードを判定する。  
-判定結果は以下のいずれかとする。
-
-- `MODE_A`: Claude Code + Codex CLI 連携可能
-- `MODE_B`: 単一AIのみで実行
-- `MODE_C`: 判定不能のため単一AIとして実行
-
-判定ルールは以下とする。
-
-1. Claude Code 相当の環境かどうかを確認する
-2. シェルまたは外部コマンド実行が可能かを確認する
-3. Codex CLI を実際に呼び出せるかを確認する
-4. 実行確認できた場合のみ `MODE_A` とする
-5. 「呼び出せそう」「想定上可能」は不可とし、確認不能なら `MODE_B` または `MODE_C` とする
-
-各レビュー報告の冒頭、または共通ヘッダには以下を含めること。
-
-```text
-EXECUTION_MODE: MODE_A
-REASON: Claude Code から Codex CLI の実行確認が取れたため
-```
-
----
-
-## 9. レビュー観点の標準定義
-
-### 9.1 Reviewer A: 仕様整合性レビュー
-
-以下を重点的に確認する。
-
-- 矛盾
-- 未定義
-- あいまい語
-- 入出力不足
-- 状態遷移の欠落
-- 承認条件の不足
-- 前工程成果物との不整合
-
-### 9.2 Reviewer B: 単純化・簡潔化レビュー
-
-以下を重点的に確認する。
-
-- 重複
-- 冗長
-- 役割分離の過剰
-- 不要な成果物
-- 不要な手順
-- 運用コスト過大
-- 似た意味の見出しやルールの二重化
-
-### 9.3 Reviewer C: 実装・運用レビュー
-
-以下を重点的に確認する。
-
-- 自動化困難点
-- テスト困難点
-- CLI/バッチ運用時の曖昧さ
-- エラー時の戻し方不足
-- 状態管理の破綻リスク
-- 実行順序の不明瞭さ
-- 実行ログ・再試行規約の不足
-
-### 9.4 Reviewer D: 質問抽出レビュー
-
-以下を重点的に確認する。
-
-- 推測で埋めるべきでない点
-- ユーザー確認が必要な点
-- 承認条件として未記載の点
-- 選択肢が複数あり、仕様方針が未確定の点
-
-### 9.5 Arbiter: 採否判定
-
-Arbiter はレビュー結果をそのまま全採用せず、以下に従って判定する。
-
-- 本当に要件不整合かを再判定する
-- 単なる好み・流儀・書き味の違いは原則却下する
-- 修正すると複雑化する指摘は慎重に扱う
-- `採用 / 保留 / 却下` を必ず明示する
-- 高重大度でも、根拠不十分なら保留または却下できる
-
----
-
-## 10. レビュー結果の定義
-
-レビュー担当AIは、各レビュー報告の末尾に必ず以下のいずれかの結果を出力する。
-
-- `APPROVED`
-- `NEEDS_REVISION`
-- `NEEDS_ANSWER`
-- `BLOCKED`
-
-### 10.1 各結果の意味
-
-#### `APPROVED`
-
-主要な問題が解消されており、次工程へ進行可能。
-
-#### `NEEDS_REVISION`
-
-改訂は必要だが、追加質問なしで修正可能。
-
-#### `NEEDS_ANSWER`
-
-仕様判断や未確定事項があり、回答ファイルの作成が必要。
-
-#### `BLOCKED`
-
-依存不足や重大矛盾があり、自動進行を停止すべき状態。
-
----
-
-## 11. レビュー報告の必須形式
-
-各レビュー報告の末尾には、以下のような機械可読ブロックを必須とする。
-
-```text
-## Review Result
-Status: APPROVED
-Blocking: no
-Next Action: start_next_artifact
-```
-
-または
-
-```text
-## Review Result
-Status: NEEDS_ANSWER
-Blocking: yes
-Next Action: answer_questions
-```
-
-この形式により、ワークフロー制御側は自由文全体を解釈せずとも、次アクションを安定して判定できる。
-
-`Next Action:` の有効値は、表記ゆれを防ぐため以下のリストに固定する。
-- `generate_artifact`
-- `review_artifact`
-- `answer_questions`
-- `await_human_answer_approval`
-- `revise_artifact`
-- `re_review`
-- `start_next_artifact`
-- `start_implementation`
-- `run_tests`
-- `mark_done`
-- `blocked`
-
-`Blocking:` は、次工程への自動進行を停止すべきかどうかを表す機械判定フラグとする。
-
-- `Blocking: yes` 次工程へ進んではならない。人間回答、仕様確定、または重大修正が完了するまで停止する。
-- `Blocking: no` 課題や質問はあるが、次工程に進める。必要に応じて後続で解消してよい。
-
-### 11.1 Status と Blocking の組み合わせ規約
-
-Status との推奨組み合わせは以下のとおりとする。
-
-- `APPROVED + Blocking: no` 正常進行
-- `APPROVED + Blocking: yes` 原則禁止
-- `NEEDS_REVISION + Blocking: yes` 修正完了まで停止
-- `NEEDS_REVISION + Blocking: no` 軽微修正では許容し得るが、通常は避ける
-- `NEEDS_ANSWER + Blocking: yes` 未回答の重要質問があるため停止
-- `NEEDS_ANSWER + Blocking: no` 補足質問のみ。後続へ進行可（次工程への進行条件 14.1 参照）
-- `BLOCKED + Blocking: yes` 停止
-
-運用上は、High の未回答質問が1件でもある場合は原則 `Blocking: yes` とし、Medium / Low のみの場合は `Blocking: no` とする。
-`Blocking: no` の NEEDS_ANSWER は AI 仮定フロー（Section 13.5 パスB）で解決し、人間承認を待たずに `revise_artifact` へ進む。
-
-### 11.2 観点別レビュー出力の推奨形式
-
-複数視点レビューを行う場合、観点別レポートは以下の情報を含むことを推奨する。
-
-- ID
-- Severity (`High / Medium / Low`)
-- Title
-- Problem
-- Evidence
-- Suggested Fix
-
-質問抽出レビューでは以下を含める。
-
-- Question ID
-- 確認が必要な内容
-- なぜ推測で決めてはいけないか
-
-採否判定では以下を含める。
-
-- 対象 ID
-- Decision (`採用 / 保留 / 却下`)
-- Reason
-
----
-
-## 12. ディレクトリ構成の推奨例
-
-```text
-project/
-  WORKFLOW.md
-  SPEC.md
-  USECASE.md
-  SEQUENCE.md
-  CLASS.md
-  TEST.md
-  IMPLEMENTATION_PLAN.md
-  reviews/
-    SPEC_review.md
-    USECASE_review.md
-    SEQUENCE_review.md
-    CLASS_review.md
-    TEST_review.md
-    IMPLEMENTATION_PLAN_review.md
-    SPEC_review_codex.md
-    SPEC_review_claude.md
-    SPEC_review_arbiter.md
-  qa/
-    SPEC_questions.md
-    SPEC_answers_draft.md
-    SPEC_answers.md
-    USECASE_questions.md
-    USECASE_answers_draft.md
-    USECASE_answers.md
-    SEQUENCE_questions.md
-    SEQUENCE_answers_draft.md
-    SEQUENCE_answers.md
-    CLASS_questions.md
-    CLASS_answers_draft.md
-    CLASS_answers.md
-    TEST_questions.md
-    TEST_answers_draft.md
-    TEST_answers.md
-  state/
-    state.json
-  logs/
-    workflow.log
-  prompts/
-    create_artifact.md
-    review_artifact.md
-    answer_questions.md
-    revise_artifact.md
-```
-
-上記は `IMPLEMENTATION_PLAN.md` を有効化し、かつ観点別レビューを保存する場合の推奨例である。  
-ブートストラップ時は最低限 `state/` `reviews/` `qa/` `logs/` を自動生成する。  
-`prompts/` は任意とし、固定テンプレート運用を採る場合のみ後から追加してよい。
-
----
-
-## 13. 標準処理手順
-
-### 13.1 ブートストラップ
-
-起動時に `state/state.json` が存在しない場合、`WORKFLOW.md` の「初期状態生成ルール」に従って `state/` `reviews/` `qa/` `logs/` を自動生成し、`state/state.json` を生成する。`prompts/` は任意とし、必要時に遅延生成する。
-
-### 13.2 生成
-
-対象成果物が存在しない場合、作成担当AIが新規作成する。
-
-### 13.3 レビュー
-
-成果物生成後、レビュー統括AIはまず実行モードを判定する。  
-その後、以下のいずれかでレビュー報告を作成する。
-
-- `MODE_A`: Claude Code と Codex CLI の連携レビュー
-- `MODE_B` または `MODE_C`: 単一AIによる複数視点レビュー
-
-### 13.4 質問抽出
-
-レビュー結果が `NEEDS_ANSWER` の場合、質問ファイルを生成する。  
-単一AIモードでは Reviewer D の結果をもとに質問ファイルを構成してよい。
-
-### 13.5 回答生成
-
-質問ファイルが存在する場合、Blocking 判定に応じて以下の2パスに分岐する。
-
-**パス A: Blocking: yes（High 質問あり）— 人間承認フロー**
-回答担当 AI（Claude Code）が回答案を `qa/*_answers_draft.md` として作成する。
-作成した回答案を人間が確認・承認した後にのみ、`qa/*_answers.md` を確定版として生成する。
-AI が High の仕様判断を自律確定することは禁止する。
-
-**パス B: Blocking: no（Medium / Low のみ）— AI 仮定フロー**
-AI が合理的な仮定を置き、`qa/*_answers.md` に仮定内容を直接記録して確定する。
-`qa/*_answers_draft.md` の生成と人間承認のステップを省略し、`revise_artifact` へ直接進む。
-仮定の根拠と内容は LOG.md に `AI-ASSUMPTION:` プレフィックスで記録する。
-
-### 13.6 改訂
-
-回答ファイルを参照し、作成担当AIが成果物を改訂する。  
-レビュー指摘は、採用判定されたもののみを改訂対象としてよい。
-
-### 13.7 再レビュー
-
-改訂済み成果物を再度レビューする。
-
-### 13.8 承認
-
-最新レビュー結果が `APPROVED` なら、その成果物を承認済みとする。
-
-### 13.9 次工程進行
-
-現在成果物が承認済み、または `NEEDS_ANSWER` であっても `Blocking: no` かつ `Next Action: start_next_artifact` の場合に、依存関係を満たす次の成果物へ進む。
-後者の場合、当該成果物は `deferred_artifacts` に登録し、一時先送りとして扱う。
-
----
-
-## 14. 進行判定ルール
-
-### 14.1 次工程に進める条件
-
-以下をすべて満たす場合にのみ、次工程へ進める。
-
-- 対象成果物が存在する
-- 最新レビュー結果が `APPROVED`、または `NEEDS_ANSWER` であっても `Blocking: no` かつ後続進行可と明示されている
-- 未解決質問が存在しない（または `Blocking: no` の軽微な質問のみである）
-- `state/state.json` に blocking issue がない
-
-`Blocking: no` による例外進行を行う場合は、当該成果物を `deferred_artifacts` に登録することを必須とする。
-
-### 14.2 差し戻し条件
-
-以下のいずれかに該当する場合、現在成果物の改訂または回答生成に戻る。
-
-- レビュー結果が `NEEDS_REVISION`
-- レビュー結果が `NEEDS_ANSWER`（かつ `Blocking: yes`）
-- 回答未反映の状態である
-- 前工程との整合性エラーがある
-
-### 14.3 停止条件
-
-以下のいずれかに該当する場合、ワークフローを停止する。
-
-- レビュー結果が `BLOCKED`
-- 必須入力ファイルが不足している
-- 外部コマンド実行に失敗し復旧不能
-- 人間判断待ち事項がある
-- セキュリティ上の判断が必要である
-
----
-
-## 15. 自動進行ループ
-
-ワークフロー制御ロジックは、概ね以下の順で処理を行う。
-
-1. `WORKFLOW.md` の存在を確認する
-2. `state/state.json` が無ければ、`state/` `reviews/` `qa/` `logs/` とあわせて初期生成する
-3. `state/state.json` を読む
-4. `current_artifact` を取得する
-5. 対象成果物が未作成なら生成する
-6. レビュー報告が未作成ならレビューする
-7. 質問ファイルがあり、回答が未完了な場合は Blocking 判定で分岐する。
-   - **Blocking: yes**（High 質問あり）: `qa/*_answers_draft.md` を生成または上書き再生成する（`answer_approval_status == rejected` または `status == needs_answer_revision` の場合も含む）。生成後は `status=answers_draft_generated`、`answer_approval_status=awaiting_human_approval` とする。
-   - **Blocking: no**（Medium / Low のみ）: AI が仮定を置き LOG.md に `AI-ASSUMPTION:` で記録したうえで `qa/*_answers.md` を直接生成し、Step 10 へ進む。`answers_draft_file` の生成と人間承認は省略する。
-8. （Blocking: yes のみ）回答ドラフトが存在し `answer_approval_status=awaiting_human_approval` なら再生成せず承認待ちで停止する。
-9. （Blocking: yes のみ）人間が `answer_approval_status=approved` に更新したことを検知して `qa/*_answers.md` を確定（生成）し、`status=answers_completed` とする。
-10. 改訂済みなら再レビューする
-11. 最新レビュー結果が `APPROVED` の場合は次成果物へ進む
-12. 最新レビュー結果が `NEEDS_ANSWER` かつ `Blocking: no` かつ `Next Action: start_next_artifact` の場合は、当該成果物を `deferred_artifacts` に登録して次成果物へ進む
-13. `artifact_order` 上の成果物をすべて処理済みで、`deferred_artifacts` が残っている場合は、実装フェーズへ進まず、`artifact_order` の早いものから再訪対象として `current_artifact` に再設定する
-14. `deferred_artifacts` が空であり、必須成果物と有効化された任意成果物が承認済みなら実装フェーズへ進む
-15. 実装・テスト完了後、`final_status` を `done` に更新する
-
----
-
-## 16. `state/state.json` 初期生成ルール
-
-`state/state.json` は以下のルールで自動生成する。
-
-### 16.1 生成タイミング
-
-- 起動時に `state/state.json` が存在しない場合
-- もしくは初期化要求が明示された場合
-
-起動時に `state/state.json` が存在し、かつ `workflow_version` フィールドが `WORKFLOW.md` のバージョンと一致しない場合は、警告ログを出力して `migrate_required: true` フラグを立てて停止する。自動再初期化は行わない（進行中の成果物状態の損失を防ぐため）。
-
-### 16.2 補助ディレクトリの初期生成
-
-- `state/`
-- `reviews/`
-- `qa/`
-- `logs/`
-
-`prompts/` は任意とし、初回ブートストラップでは生成必須としない。
-
-### 16.3 成果物定義の解決
-
-- `WORKFLOW.md` 内に `## Artifact Definitions` セクションがある場合は、その定義を優先して使う
-- 定義が無い場合は `SPEC.md` `USECASE.md` `SEQUENCE.md` `CLASS.md` `TEST.md` を標準の必須成果物として使う
-- `IMPLEMENTATION_PLAN.md` や追加成果物は、機械可読定義に列挙された場合のみ有効化する
-
-### 16.4 初期値
-
-- `project_name`: ルートフォルダ名、または固定名
-- `workflow_version`: `WORKFLOW.md` のバージョン文字列（例: `"0.3.4"`）
-- `current_artifact`: `SPEC.md`（自動進行判定の主キー）
-- `current_phase`: `spec`（補助表示用。自動進行判定には使用しない）
-  取りうる値: `spec` / `usecase` / `sequence` / `class` / `test` / `optional` / `implementation` / `testing` / `done`
-- `final_status`: `in_progress`
-- `blocking_issues`: 空配列
-- `deferred_artifacts`: 空配列
-- `human_decisions_pending`: 空配列
-- `next_action`: `generate_artifact`（`current_artifact` と組み合わせて解釈する。`generate_spec` などの成果物固有値は使用しない）
-- `artifact_order`: 成果物定義セクション、または標準定義に従う
-- `review_execution_mode`: `unknown`
-
-### 16.5 成果物ごとの初期化
-
-有効化された各成果物は以下の初期状態で生成する。
-
-- `required`: 必須成果物なら `true`、任意成果物なら `false`
-- `status`: `not_started`
-- `review_status`: `null`
-- `review_file`: 規約パスを設定
-- `questions_file`: 規約パスを設定
-- `answers_draft_file`: 規約パスを設定
-- `answers_file`: 規約パスを設定
-- `answer_approval_status`: `none`
-- `pending_question_set`: `null`
-- `revision_count`: `0`
-- `approved`: `false`
-
-ただし、`current_artifact` である `SPEC.md` は開始対象であるため、`next_action` は `generate_artifact` とする。
-
-### 16.6 規約パス
-
-例:
-
-- `reviews/SPEC_review.md`
-- `qa/SPEC_questions.md`
-- `qa/SPEC_answers_draft.md`
-- `qa/SPEC_answers.md`
-
----
-
-## 17. `state/state.json` 自動生成テンプレート
-
-このテンプレートは機械可読な成果物定義が存在しない場合の標準例である。`## Artifact Definitions` に任意成果物が定義されている場合は、それらを `artifact_order` と `artifacts` に追加して生成する。
-
-以下は標準テンプレートである。
-
-```json
-{
-  "project_name": "sample-project",
-  "workflow_version": "0.3.5",
-  "current_artifact": "SPEC.md",
-  "current_phase": "spec",
-  "final_status": "in_progress",
-  "migrate_required": false,
-  "review_execution_mode": "unknown",
-  "artifact_order": [
-    "SPEC.md",
-    "USECASE.md",
-    "SEQUENCE.md",
-    "CLASS.md",
-    "TEST.md"
-  ],
-  "artifacts": {
-    "SPEC.md": {
-      "required": true,
-      "status": "not_started",
-      "review_status": null,
-      "review_file": "reviews/SPEC_review.md",
-      "questions_file": "qa/SPEC_questions.md",
-      "answers_draft_file": "qa/SPEC_answers_draft.md",
-      "answers_file": "qa/SPEC_answers.md",
-      "answer_approval_status": "none",
-      "pending_question_set": null,
-      "revision_count": 0,
-      "approved": false
-    },
-    "USECASE.md": {
-      "required": true,
-      "status": "not_started",
-      "review_status": null,
-      "review_file": "reviews/USECASE_review.md",
-      "questions_file": "qa/USECASE_questions.md",
-      "answers_draft_file": "qa/USECASE_answers_draft.md",
-      "answers_file": "qa/USECASE_answers.md",
-      "answer_approval_status": "none",
-      "pending_question_set": null,
-      "revision_count": 0,
-      "approved": false
-    },
-    "SEQUENCE.md": {
-      "required": true,
-      "status": "not_started",
-      "review_status": null,
-      "review_file": "reviews/SEQUENCE_review.md",
-      "questions_file": "qa/SEQUENCE_questions.md",
-      "answers_draft_file": "qa/SEQUENCE_answers_draft.md",
-      "answers_file": "qa/SEQUENCE_answers.md",
-      "answer_approval_status": "none",
-      "pending_question_set": null,
-      "revision_count": 0,
-      "approved": false
-    },
-    "CLASS.md": {
-      "required": true,
-      "status": "not_started",
-      "review_status": null,
-      "review_file": "reviews/CLASS_review.md",
-      "questions_file": "qa/CLASS_questions.md",
-      "answers_draft_file": "qa/CLASS_answers_draft.md",
-      "answers_file": "qa/CLASS_answers.md",
-      "answer_approval_status": "none",
-      "pending_question_set": null,
-      "revision_count": 0,
-      "approved": false
-    },
-    "TEST.md": {
-      "required": true,
-      "status": "not_started",
-      "review_status": null,
-      "review_file": "reviews/TEST_review.md",
-      "questions_file": "qa/TEST_questions.md",
-      "answers_draft_file": "qa/TEST_answers_draft.md",
-      "answers_file": "qa/TEST_answers.md",
-      "answer_approval_status": "none",
-      "pending_question_set": null,
-      "revision_count": 0,
-      "approved": false
-    }
-  },
-  "blocking_issues": [],
-  "deferred_artifacts": [],
-  "human_decisions_pending": [],
-  "next_action": "generate_artifact"
-}
-```
-
-任意成果物を有効化する場合は、機械可読定義セクションに列挙した上で、同じ構造のエントリを `artifact_order` と `artifacts` に追加する。任意成果物の `required` は `false` とする。
-
----
-
-## 18. 実装フェーズへの進行条件
-
-以下をすべて満たした場合のみ、実装フェーズへ進行できる。
-
-- `SPEC.md` が承認済み
-- `USECASE.md` が承認済み
-- `SEQUENCE.md` が承認済み
-- `CLASS.md` が承認済み
-- `TEST.md` が承認済み
-- `artifact_order` に含まれる任意成果物がある場合、それらも承認済み
-
-設計成果物間の進行では `Blocking: no` による例外進行を許容し得るが、実装フェーズへの進行条件には適用しない。実装開始前には、必須成果物および有効化された任意成果物がすべて `APPROVED` であることを要求する。
-`deferred_artifacts` が1件でも残っている間は `start_implementation` へ進んではならず、先送り成果物を再訪して解消することを必須とする。
-
----
-
-## 19. テストフェーズへの進行条件
-
-以下をすべて満たした場合のみ、テスト実行へ進行できる。
-
-- 実装コードが存在する
-- テストコードが存在する
-- 実装レビューが `APPROVED`
-- 実装と設計文書の重大矛盾が解消済みである
-
----
-
-## 20. ログ出力要件
-
-すべての処理は `logs/workflow.log` に JSONL 形式（1行1イベント）で記録する。
-
-各エントリの最低限フィールドは以下とする。
-
-```json
-{
-  "timestamp": "ISO8601",
-  "artifact": "SPEC.md",
-  "step": "review",
-  "actor": "claude_code",
-  "command": "",
-  "output_file": "reviews/SPEC_review.md",
-  "status": "APPROVED",
-  "next_action": "start_next_artifact",
-  "execution_mode": "MODE_B",
-  "error": null
-}
-```
-
-- `actor`: `claude_code` / `codex_cli` / `human` のいずれか
-- `step`: `bootstrap` / `generate` / `review` / `extract_questions` / `generate_answers` / `revise` / `approve` / `implement` / `test` のいずれか
-- `error`: エラーがない場合は `null`
-
-ログは後から「なぜ止まったか」「どの回答で方針が変わったか」を追跡するために用いる。
-
----
-
-## 21. エラー時の取り扱い
-
-### 21.1 一時的エラー
-
-API 呼び出し失敗や CLI 実行失敗など、一時的なエラーは再試行対象とする。
-再試行は最大3回、指数バックオフで実施する。上限超過後は `blocked` に遷移し、`blocking_issues` にエラー内容を記録して停止する。
-
-### 21.2 論理エラー
-
-レビューで重大矛盾が出た場合は、自動再試行せず `blocked` とし、人間または回答担当AIの判断を待つ。
-
-### 21.3 ファイル欠落
-
-前提ファイルが欠けている場合、当該成果物は進行不能とし、`blocking_issues` に記録する。
-
-### 21.4 連携失敗時の扱い
-
-Claude Code から Codex CLI の呼び出しを想定していた場合でも、実行時に呼び出し確認が取れない、またはコマンド失敗が継続する場合は、連携レビュー方式を継続前提とせず、**単独レビュー方式へフォールバックする**。  
-このフォールバックは異常終了ではなく、正常な代替経路として扱う。
-
----
-
-## 22. 最小構成で必要なファイル
-
-本ワークフローを最低限動かすために必要なファイルは以下の1つである。
-
-- `WORKFLOW.md`
-
-本バージョンでは、`WORKFLOW.md` が存在すれば、そこから `state/` `reviews/` `qa/` `logs/` と `state/state.json` を初期生成できる。  
-その後、ワークフローは成果物定義に従って最初の成果物を確定し、自動的に設計フェーズを開始する。
-
----
-
-## 23. 完了条件
-
-以下をすべて満たした場合に、ワークフローは完了とみなす。
-
-- 必須成果物がすべて `approved`
-- `artifact_order` に含まれる任意成果物がある場合、それらも `approved`
-- 実装レビューが `APPROVED`
-- テスト結果が成功
-- `state/state.json.final_status == "done"`
-
----
-
-## 24. Codex CLI 実行規約
-
-### 24.1 レビュー実行
-
-```bash
-codex exec "SPEC.md をレビューし、曖昧点・不足・矛盾を列挙し、最後に APPROVED / NEEDS_ANSWER / NEEDS_REVISION / BLOCKED を出力せよ"
-```
-
-### 24.2 JSONL 実行
-
-```bash
-codex exec --json "USECASE.md をレビューせよ"
-```
-
-`--json` オプションの出力フォーマットは参考利用にとどめる。自動進行ループが次アクションを判定する際の正式な機械判定対象は、Section 11 の機械可読ブロック（`## Review Result` / `Status:` / `Blocking:` / `Next Action:`）のみとする。
-
-### 24.3 連携レビュー時の注意
-
-- Codex CLI を呼び出せることを**実行確認できた場合のみ**、連携レビュー方式を選択してよい
-- 実行確認できない場合は、Codex 呼び出し前提のレビュー報告を書いてはならない
-- 判定不能時は単独レビュー方式へフォールバックする
-
----
-
-## 25. まとめ
-
-このワークフローの本質は、AIを賢くすることではなく、**AIが迷わないように状態と停止条件を明示すること**にある。  
-従来は `SPEC.md`、`WORKFLOW.md`、`state/state.json` の3点セットを最小構成としていたが、本バージョンでは `WORKFLOW.md` 自体に `state/state.json` の初期生成ルールと成果物定義ルールを埋め込むことで、起動時の必要ファイルをさらに削減した。
-
-さらに本バージョンでは、レビューの実行方式として「連携レビュー方式」と「単独レビュー方式」を明文化した。  
-これにより、Claude Code と Codex CLI が両方使える環境では役割分担によるレビュー品質向上を狙え、片方しか使えない環境でも運用を止めずに継続できる。
-
-したがって、AI駆動開発を最小構成で始めたい場合、人間が最初に用意すべきファイルは次の1つになる。
-
-- `WORKFLOW.md`
-
-この `WORKFLOW.md` を起点として、`state/state.json` の初期化、成果物定義の解決、レビュー、質問回答、改訂、採否判定、承認、実装までを段階的に機械化しやすくなる。
-
----
-
-## Artifact Definitions
-
-```yaml
-artifacts:
-  - name: SPEC.md
-    required: true
-  - name: USECASE.md
-    required: true
-  - name: SEQUENCE.md
-    required: true
-  - name: CLASS.md
-    required: true
-  - name: TEST.md
-    required: true
-  - name: IMPLEMENTATION_PLAN.md
-    required: false
-```
+軽微な内部ループごとに詳細報告しすぎなくてよい。成果物単位で要約して記録すること。
