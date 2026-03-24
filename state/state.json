@@ -3,7 +3,7 @@
   "workflow_version": "0.3.5",
   "current_artifact": "SPEC.md",
   "current_phase": "spec",
-  "final_status": "in_progress",
+  "final_status": "paused",
   "migrate_required": false,
   "review_execution_mode": "MODE_B",
   "next_action": "re_review",
