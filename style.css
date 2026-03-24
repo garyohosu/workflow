@@ -29,25 +29,6 @@ h2 {
   margin-top: 24px;
 }
 
-/* インストールボタン */
-#install-btn {
-  display: block;
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 16px;
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #a5d6a7;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  cursor: pointer;
-  text-align: center;
-}
-
-#install-btn:active {
-  background: #c8e6c9;
-}
-
 /* 入力エリア */
 .input-row {
   display: flex;

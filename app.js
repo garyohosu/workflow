@@ -246,29 +246,3 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ────────────────────────────────────────
-// PWA インストールボタン（Android/Desktop Chrome）
-// ────────────────────────────────────────
-let deferredPrompt = null;
-const installBtn = document.getElementById('install-btn');
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  if (installBtn) installBtn.hidden = false;
-});
-
-if (installBtn) {
-  installBtn.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    deferredPrompt = null;
-    installBtn.hidden = true;
-  });
-}
-
-window.addEventListener('appinstalled', () => {
-  if (installBtn) installBtn.hidden = true;
-  deferredPrompt = null;
-});
