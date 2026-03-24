@@ -4,7 +4,7 @@
 AI成果物レビュー駆動ワークフロー
 
 ## バージョン
-0.3.1
+0.3.2
 
 ## ステータス
 Draft
@@ -424,7 +424,7 @@ Status との推奨組み合わせは以下のとおりとする。
 
 運用上は、High の未回答質問が1件でもある場合は原則 `Blocking: yes` とし、Medium / Low のみで仕様確定に直結しない場合は `Blocking: no` を許容する。
 
-### 11.1 観点別レビュー出力の推奨形式
+### 11.2 観点別レビュー出力の推奨形式
 
 複数視点レビューを行う場合、観点別レポートは以下の情報を含むことを推奨する。
 
@@ -472,14 +472,19 @@ project/
     SPEC_review_arbiter.md
   qa/
     SPEC_questions.md
+    SPEC_answers_draft.md
     SPEC_answers.md
     USECASE_questions.md
+    USECASE_answers_draft.md
     USECASE_answers.md
     SEQUENCE_questions.md
+    SEQUENCE_answers_draft.md
     SEQUENCE_answers.md
     CLASS_questions.md
+    CLASS_answers_draft.md
     CLASS_answers.md
     TEST_questions.md
+    TEST_answers_draft.md
     TEST_answers.md
   state/
     state.json
@@ -541,7 +546,7 @@ project/
 
 ### 13.9 次工程進行
 
-現在成果物が承認済みの場合のみ、依存関係を満たす次の成果物へ進む。
+現在成果物が承認済み、または `NEEDS_ANSWER` であっても `Blocking: no` かつ `Next Action: start_next_artifact` の場合に、依存関係を満たす次の成果物へ進む。
 
 ---
 
@@ -633,7 +638,7 @@ project/
 - `final_status`: `in_progress`
 - `blocking_issues`: 空配列
 - `human_decisions_pending`: 空配列
-- `next_action`: `generate_spec`
+- `next_action`: `generate_artifact`（`current_artifact` と組み合わせて解釈する。`generate_spec` などの成果物固有値は使用しない）
 - `artifact_order`: 成果物定義セクション、または標準定義に従う
 - `review_execution_mode`: `unknown`
 
@@ -653,7 +658,7 @@ project/
 - `revision_count`: `0`
 - `approved`: `false`
 
-ただし、`current_artifact` である `SPEC.md` は開始対象であるため、`next_action` は `generate_spec` とする。
+ただし、`current_artifact` である `SPEC.md` は開始対象であるため、`next_action` は `generate_artifact` とする。
 
 ### 16.6 規約パス
 
@@ -675,7 +680,7 @@ project/
 ```json
 {
   "project_name": "sample-project",
-  "workflow_version": "0.3.1",
+  "workflow_version": "0.3.2",
   "current_artifact": "SPEC.md",
   "current_phase": "spec",
   "final_status": "in_progress",
@@ -757,7 +762,7 @@ project/
   },
   "blocking_issues": [],
   "human_decisions_pending": [],
-  "next_action": "generate_spec"
+  "next_action": "generate_artifact"
 }
 ```
 
