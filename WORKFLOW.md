@@ -392,10 +392,25 @@ Next Action: answer_questions
 
 この形式により、ワークフロー制御側は自由文全体を解釈せずとも、次アクションを安定して判定できる。
 
+`Next Action:` の有効値は、表記ゆれを防ぐため以下のリストに固定する。
+- `generate_artifact`
+- `review_artifact`
+- `answer_questions`
+- `await_human_answer_approval`
+- `revise_artifact`
+- `re_review`
+- `start_next_artifact`
+- `start_implementation`
+- `run_tests`
+- `mark_done`
+- `blocked`
+
 `Blocking:` は、次工程への自動進行を停止すべきかどうかを表す機械判定フラグとする。
 
 - `Blocking: yes` 次工程へ進んではならない。人間回答、仕様確定、または重大修正が完了するまで停止する。
 - `Blocking: no` 課題や質問はあるが、次工程に進める。必要に応じて後続で解消してよい。
+
+### 11.1 Status と Blocking の組み合わせ規約
 
 Status との推奨組み合わせは以下のとおりとする。
 
@@ -404,7 +419,7 @@ Status との推奨組み合わせは以下のとおりとする。
 - `NEEDS_REVISION + Blocking: yes` 修正完了まで停止
 - `NEEDS_REVISION + Blocking: no` 軽微修正では許容し得るが、通常は避ける
 - `NEEDS_ANSWER + Blocking: yes` 未回答の重要質問があるため停止
-- `NEEDS_ANSWER + Blocking: no` 補足質問のみ。後続へ進行可
+- `NEEDS_ANSWER + Blocking: no` 補足質問のみ。後続へ進行可（次工程への進行条件 14.1 参照）
 - `BLOCKED + Blocking: yes` 停止
 
 運用上は、High の未回答質問が1件でもある場合は原則 `Blocking: yes` とし、Medium / Low のみで仕様確定に直結しない場合は `Blocking: no` を許容する。
@@ -537,8 +552,8 @@ project/
 以下をすべて満たす場合にのみ、次工程へ進める。
 
 - 対象成果物が存在する
-- 最新レビュー結果が `APPROVED`
-- 未解決質問が存在しない
+- 最新レビュー結果が `APPROVED`、または `NEEDS_ANSWER` であっても `Blocking: no` かつ後続進行可と明示されている
+- 未解決質問が存在しない（または `Blocking: no` の軽微な質問のみである）
 - `state/state.json` に blocking issue がない
 
 ### 14.2 差し戻し条件
@@ -546,7 +561,7 @@ project/
 以下のいずれかに該当する場合、現在成果物の改訂または回答生成に戻る。
 
 - レビュー結果が `NEEDS_REVISION`
-- レビュー結果が `NEEDS_ANSWER`
+- レビュー結果が `NEEDS_ANSWER`（かつ `Blocking: yes`）
 - 回答未反映の状態である
 - 前工程との整合性エラーがある
 
@@ -574,9 +589,9 @@ project/
 6. レビュー報告が未作成ならレビューする
 7. 質問ファイルがあり、回答ドラフトが未生成なら `qa/*_answers_draft.md` を生成する
 8. 回答ドラフトが存在し、`answer_approval_status` が `awaiting_human_approval` なら再生成せず承認待ちで停止する
-9. 人間承認後に `qa/*_answers.md` を確定し、未反映なら成果物を改訂する
+9. 人間が `answer_approval_status=approved` に更新したことを検知して `qa/*_answers.md` を確定（生成）し、未反映なら成果物を改訂する。確定後は `status=answers_completed` とする。
 10. 改訂済みなら再レビューする
-11. 最新レビュー結果が `APPROVED` なら次成果物へ進む
+11. 最新レビュー結果が `APPROVED`、または `Blocking: no` かつ `Next Action: start_next_artifact` の場合は次成果物へ進む
 12. 必須成果物と有効化された任意成果物が承認済みなら実装フェーズへ進む
 13. 実装・テスト完了後、`final_status` を `done` に更新する
 
@@ -653,7 +668,9 @@ project/
 
 ## 17. `state/state.json` 自動生成テンプレート
 
-以下は `WORKFLOW.md` に機械可読定義が存在しない場合に生成される `state/state.json` の標準テンプレートである。
+このテンプレートは機械可読な成果物定義が存在しない場合の標準例である。`## Artifact Definitions` に任意成果物が定義されている場合は、それらを `artifact_order` と `artifacts` に追加して生成する。
+
+以下は標準テンプレートである。
 
 ```json
 {

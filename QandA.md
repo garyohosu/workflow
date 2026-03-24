@@ -186,3 +186,63 @@ Status との組み合わせ規約:
 - High の未回答質問が1件でもある場合は原則 `Blocking: yes`
 - Medium / Low のみで、かつ仕様確定に直結しない場合は `Blocking: no`
 - 自動進行ループは `Blocking: yes` を見たら `blocked` へ遷移し、`blocking_issues` に記録する
+
+---
+
+## 追加レビュー質問（v0.3.1 レビュー）
+
+## Q-A13 【Medium】Review Result 内の `Next Action` の有効値リスト
+
+**質問**: Section 11 で定義されている `Next Action:` や、Section 16.4 の `next_action` で使用される文字列の完全なリストはあるか？
+自動進行ループを安定させるため、`start_next_artifact`, `answer_questions`, `generate_spec`, `revise_artifact`, `re_review` などの有効値を定義すべきではないか。
+
+**回答（確定）**: Next Action の有効値を以下に固定する。
+- `generate_artifact`
+- `review_artifact`
+- `answer_questions`
+- `await_human_answer_approval`
+- `revise_artifact`
+- `re_review`
+- `start_next_artifact`
+- `start_implementation`
+- `run_tests`
+- `mark_done`
+- `blocked`
+
+補足として、`generate_spec` などの成果物固有値は廃止し、`current_artifact` と組み合わせて解釈する。表記ゆれを防ぐため、AI に自由作文させずこれらの値から選択させる。
+
+---
+
+## Q-A14 【High】`NEEDS_ANSWER + Blocking: no` 時の進行ロジック
+
+**質問**: Section 11.1 では `NEEDS_ANSWER + Blocking: no` の場合に「後続へ進行可」としているが、Section 15（自動進行ループ）の Step 11 では「最新レビュー結果が `APPROVED` なら次成果物へ進む」と記述されており、整合していない。
+Step 11 の判定条件を `APPROVED` または `Blocking: no` に拡張すべきか？
+
+**回答（確定）**: Section 14.1（進行条件）と Section 15 Step 11（自動進行ループ）の両方を修正し、`APPROVED` だけでなく `Blocking: no` かつ `Next Action: start_next_artifact` の場合も進行可能とする。
+
+- Section 14.1 の進行条件を「最新レビュー結果が APPROVED、または NEEDS_ANSWER であっても Blocking: no かつ後続進行可と明示されていること」に緩和する。
+- Section 15 Step 11 を「最新レビュー結果が APPROVED、または Blocking: no かつ Next Action: start_next_artifact の場合は次成果物へ進む」に変更する。
+
+---
+
+## Q-A15 【Medium】`qa/*_answers.md` 確定処理の主体とトリガー
+
+**質問**: Section 13.5 および 15 (Step 9) によれば、人間承認後に `_answers.md` が確定される。
+この「確定（ファイルの書き出し）」を行うのは AI か人間か？
+AI が行う場合、人間が `answer_approval_status` を `approved` に更新したことを検知して自動で `_answers_draft.md` を `_answers.md` へリネーム/コピーする挙動でよいか？
+
+**回答（確定）**: 承認は人間が行い、確定ファイルの書き出しは AI（Claude Code）が行う。
+1. 人間が `answer_approval_status=approved` に更新する。
+2. AI がそれを検知し、`*_answers_draft.md` から `*_answers.md` を生成する。
+3. 生成後、AI が `status=answers_completed` に更新する。
+これにより、責任分界を明確にしつつ自動進行ループとの親和性を高める。
+
+---
+
+## Q-A16 【Low】Section 17 テンプレートと末尾定義の不整合
+
+**質問**: Section 17 の `state/state.json` テンプレートには `IMPLEMENTATION_PLAN.md` が含まれていないが、末尾の `Artifact Definitions` には含まれている。
+テンプレートはあくまで「定義がない場合のデフォルト」という位置づけだが、同じファイル内で食い違っていると混乱を招くため、テンプレート側にもコメントで「定義に従って追加される」旨を記すべきではないか。
+
+**回答（確定）**: Section 17 のテンプレート直前に以下の注記を追加する。
+「このテンプレートは機械可読な成果物定義が存在しない場合の標準例である。## Artifact Definitions に任意成果物が定義されている場合は、それらを artifact_order と artifacts に追加して生成する。」
