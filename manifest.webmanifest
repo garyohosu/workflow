@@ -15,22 +15,25 @@
       "purpose": "any"
     },
     {
-      "src": "/workflow/icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
       "src": "/workflow/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/workflow/icons/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "label": "買い物メモ"
     },
     {
-      "src": "/workflow/icons/icon-512.png",
-      "sizes": "512x512",
+      "src": "/workflow/icons/screenshot-wide.png",
+      "sizes": "1280x800",
       "type": "image/png",
-      "purpose": "maskable"
+      "form_factor": "wide",
+      "label": "買い物メモ（デスクトップ）"
     }
   ]
 }
