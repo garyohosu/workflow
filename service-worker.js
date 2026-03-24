@@ -1,15 +1,15 @@
-const CACHE_NAME = 'shopping-memo-v2';
+const CACHE_NAME = 'shopping-memo-v3';
 const ASSETS = [
-  './',
-  './index.html',
-  './style.css',
-  './app.js',
-  './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
+  '/workflow/',
+  '/workflow/index.html',
+  '/workflow/style.css',
+  '/workflow/app.js',
+  '/workflow/manifest.webmanifest',
+  '/workflow/icons/icon-192.png',
+  '/workflow/icons/icon-512.png',
 ];
 
-// インストール: 静的アセットをキャッシュ（1件失敗してもインストール自体は続行）
+// インストール: 静的アセットをキャッシュ
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
@@ -19,7 +19,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// アクティベート: 旧キャッシュを削除
+// アクティベート: 旧キャッシュをすべて削除
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
