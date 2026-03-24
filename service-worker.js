@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shopping-memo-v1';
+const CACHE_NAME = 'shopping-memo-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -9,10 +9,12 @@ const ASSETS = [
   './icons/icon-512.png',
 ];
 
-// インストール: 静的アセットをキャッシュ
+// インストール: 静的アセットをキャッシュ（1件失敗してもインストール自体は続行）
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME).then((cache) =>
+      Promise.allSettled(ASSETS.map((url) => cache.add(url)))
+    )
   );
   self.skipWaiting();
 });
