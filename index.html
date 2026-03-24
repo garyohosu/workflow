@@ -7,10 +7,19 @@
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#4caf50">
+
+  <!-- iOS PWA サポート -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="買い物メモ">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
 </head>
 <body>
   <div class="container">
     <h1>買い物メモ</h1>
+
+    <!-- Android/Desktop Chrome 向けインストールボタン（条件を満たした時のみ表示） -->
+    <button id="install-btn" hidden>ホーム画面に追加</button>
 
     <div class="input-row">
       <input type="text" id="item-input" placeholder="買うものを入力" maxlength="100" autocomplete="off">
