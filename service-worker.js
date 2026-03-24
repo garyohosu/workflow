@@ -1,4 +1,4 @@
-const CACHE_NAME = 'shopping-memo-v4';
+const CACHE_NAME = 'shopping-memo-v5';
 const ASSETS = [
   '/workflow/',
   '/workflow/index.html',
