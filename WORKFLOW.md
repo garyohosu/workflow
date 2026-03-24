@@ -4,7 +4,7 @@
 AI成果物レビュー駆動ワークフロー
 
 ## バージョン
-0.3.2
+0.3.3
 
 ## ステータス
 Draft
@@ -46,8 +46,9 @@ Draft
 
 本ワークフローは、以下の原則に従って動作する。
 
-1. **承認されるまで次工程へ進まない**  
+1. **原則として承認されるまで次工程へ進まない**
    最新レビュー結果が `APPROVED` でない成果物は未完了とみなす。
+   ただし、`NEEDS_ANSWER` であっても `Blocking: no` かつ `Next Action: start_next_artifact` の場合は、補足質問を後続で解消する前提で例外的に次工程へ進んでよい。
 
 2. **不明点は必ず質問として分離する**  
    レビュー本文に埋め込まず、`qa/*_questions.md` に切り出す。
@@ -592,7 +593,10 @@ project/
 4. `current_artifact` を取得する
 5. 対象成果物が未作成なら生成する
 6. レビュー報告が未作成ならレビューする
-7. 質問ファイルがあり、回答ドラフトが未生成なら `qa/*_answers_draft.md` を生成する
+7. 質問ファイルがあり、以下のいずれかを満たす場合は `qa/*_answers_draft.md` を生成または上書き再生成する。生成後は `status=answers_draft_generated`、`answer_approval_status=awaiting_human_approval` とする。
+   - `answers_draft_file` が未存在
+   - `answer_approval_status == rejected`
+   - `status == needs_answer_revision`
 8. 回答ドラフトが存在し、`answer_approval_status` が `awaiting_human_approval` なら再生成せず承認待ちで停止する
 9. 人間が `answer_approval_status=approved` に更新したことを検知して `qa/*_answers.md` を確定（生成）し、未反映なら成果物を改訂する。確定後は `status=answers_completed` とする。
 10. 改訂済みなら再レビューする
@@ -680,7 +684,7 @@ project/
 ```json
 {
   "project_name": "sample-project",
-  "workflow_version": "0.3.2",
+  "workflow_version": "0.3.3",
   "current_artifact": "SPEC.md",
   "current_phase": "spec",
   "final_status": "in_progress",
@@ -780,6 +784,8 @@ project/
 - `CLASS.md` が承認済み
 - `TEST.md` が承認済み
 - `artifact_order` に含まれる任意成果物がある場合、それらも承認済み
+
+設計成果物間の進行では `Blocking: no` による例外進行を許容し得るが、実装フェーズへの進行条件には適用しない。実装開始前には、必須成果物および有効化された任意成果物がすべて `APPROVED` であることを要求する。
 
 ---
 

@@ -260,6 +260,17 @@ AI が行う場合、人間が `answer_approval_status` を `approved` に更新
 | **なぜ推測で決めてはいけないか** | 却下後に既存ドラフトを上書きするのか、連番ファイルで保存するのか（例: `*_answers_draft_v2.md`）によって、ループ処理・ファイル命名規約・状態遷移が変わる。 |
 | **質問** | `needs_answer_revision` 状態でドラフトを再生成する場合、既存の `*_answers_draft.md` を上書きするか、別ファイルに保存するか？また、自動ループのどのステップで再生成を行うか？ |
 
+**回答（確定）**: 既存の `*_answers_draft.md` を上書き再生成する。連番ファイルにすると state と自動進行が複雑になるため単純化を優先する。履歴はログで追う。
+
+Step 7 の生成トリガー条件を以下のいずれかを満たす場合に拡張する。
+- `answers_draft_file` が未存在
+- `answer_approval_status == rejected`
+- `status == needs_answer_revision`
+
+再生成後の状態:
+- `status = answers_draft_generated`
+- `answer_approval_status = awaiting_human_approval`
+
 ---
 
 ## Q-A18 【High】Section 3 原則1 と Q-A14（`Blocking: no` 進行）の矛盾
@@ -271,6 +282,12 @@ AI が行う場合、人間が `answer_approval_status` を `approved` に更新
 | **なぜ推測で決めてはいけないか** | 原則の記述が実際の動作と食い違うと、AIが原則を読んで誤った判断をするリスクがある。 |
 | **質問** | 原則1を「`Blocking: no` の `NEEDS_ANSWER` は例外的に次工程へ進行可能」と修正するか？または「原則として APPROVED を要求するが、軽微な未確定事項は後続で解消できる」と表現を緩和するか？ |
 
+**回答（確定）**: 文案A を採用して原則1を以下のとおり修正する。
+
+> 原則として承認されるまで次工程へ進まない。
+> 最新レビュー結果が `APPROVED` でない成果物は未完了とみなす。
+> ただし、`NEEDS_ANSWER` であっても `Blocking: no` かつ `Next Action: start_next_artifact` の場合は、補足質問を後続で解消する前提で例外的に次工程へ進んでよい。
+
 ---
 
 ## Q-A19 【Medium】Section 18（実装フェーズ進行条件）に `Blocking: no` 例外を適用するか
@@ -281,3 +298,8 @@ AI が行う場合、人間が `answer_approval_status` を `approved` に更新
 | **根拠** | Section 18（行768–777）と Section 14.1 の進行条件の関係。 |
 | **なぜ推測で決めてはいけないか** | 実装フェーズへの移行は後戻りコストが高いため、`Blocking: no` での進行を許すかどうかは意図的に決める必要がある。 |
 | **質問** | Section 18 の実装フェーズ進行条件は「全必須成果物が `APPROVED`」のみを要求するか（`Blocking: no` 例外なし）？それとも設計工程と同様に `Blocking: no` を許容するか？ |
+
+**回答（確定）**: Section 18 の実装フェーズゲートには `Blocking: no` 例外を適用しない。設計成果物間の進行緩和と実装フェーズ移行の重さは異なるため、実装開始前は全成果物 `APPROVED` を必須とする。
+
+以下の一文を Section 18 に追加する。
+「設計成果物間の進行では `Blocking: no` による例外進行を許容し得るが、実装フェーズへの進行条件には適用しない。実装開始前には、必須成果物および有効化された任意成果物がすべて `APPROVED` であることを要求する。」
