@@ -1,4 +1,5 @@
 {
+  "id": "/workflow/",
   "name": "買い物メモ",
   "short_name": "買い物メモ",
   "description": "シンプルな買い物思い出しメモ",
@@ -26,6 +27,7 @@
       "src": "/workflow/icons/screenshot-mobile.png",
       "sizes": "390x844",
       "type": "image/png",
+      "form_factor": "narrow",
       "label": "買い物メモ"
     },
     {
