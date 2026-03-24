@@ -4,7 +4,7 @@
 AI成果物レビュー駆動ワークフロー
 
 ## バージョン
-0.3.0
+0.3.1
 
 ## ステータス
 Draft
@@ -105,12 +105,15 @@ Codex CLI は主にレビューを担当する。
 
 ### 4.3 回答担当AI
 
-回答担当AIは、レビューで抽出された質問への回答を担当する。
+回答担当AIは、レビューで抽出された質問への回答案の作成を担当する。
 
-- 方針の明確化
-- 未確定事項の補完
-- 仕様分岐の選択
-- 改訂に必要な判断の文書化
+- 方針の明確化案の作成
+- 未確定事項の選択肢提示
+- 仕様分岐の選択案の作成
+- 改訂に必要な判断の文書化案の作成
+
+AIが作成した回答案は、人間が確認・承認して初めて `qa/*_answers.md` として確定する。
+AIが仕様判断を自律確定することは禁止する（原則6）。MODE_A（連携レビュー）でも回答ファイル生成は Claude Code が担当し、Codex CLI はレビュー専任とする。
 
 ### 4.4 単一AI運用時の扱い
 
@@ -184,8 +187,6 @@ artifacts:
     required: true
   - name: IMPLEMENTATION_PLAN.md
     required: false
-  - name: API.md
-    required: false
 ```
 ````
 
@@ -201,13 +202,14 @@ artifacts:
 
 - `not_started` まだ開始していない状態。
 - `drafted` 初版が作成された状態。
-- `review_requested` レビュー依頼済みで、レビュー結果待ちの状態。
 - `reviewed` レビュー報告が作成された状態。
 - `questions_pending` 未回答質問が存在する状態。
-- `answers_completed` 質問への回答が作成済みの状態。
+- `answers_completed` 質問への回答が作成済みの状態（人間承認済み）。
 - `revised` 回答を反映して成果物を改訂した状態。
 - `approved` 最新レビュー結果が `APPROVED` の状態。
 - `blocked` 人間判断待ち、依存不足、重大矛盾などにより進行不能な状態。
+
+注: `review_requested`（非同期レビュー待機）は現バージョンでは使用しない。将来、非同期レビュー設計を導入する際に復活させる。
 
 ---
 
@@ -217,7 +219,7 @@ artifacts:
 
 ### 8.1 連携レビュー方式
 
-Claude Code から Codex CLI を**実際に実行確認できる**場合、Claude Code と Codex CLI を別視点レビュアーとして用いる。  
+Claude Code から Codex CLI を**実際に実行確認できる**場合、Claude Code と Codex CLI を別視点レビュアーとして用いる。
 この場合、少なくとも以下の観点を分担して実施する。
 
 - Claude Code 側: 文書整合性、状態遷移、前後成果物依存、進行破綻、質問抽出
@@ -229,6 +231,16 @@ Claude Code から Codex CLI を**実際に実行確認できる**場合、Claud
 - 保守性レビュー
 - 例外系レビュー
 - 自動実行安全性レビュー
+
+連携レビュー時は観点別のレビューファイルを個別に保存したうえで、必ず最終統合ファイルを1本生成する。
+`state/state.json` の `review_file` は統合ファイルのみを参照する。
+
+```text
+reviews/SPEC_review_claude.md    ← 観点別（保存）
+reviews/SPEC_review_codex.md     ← 観点別（保存）
+reviews/SPEC_review_arbiter.md   ← 観点別（保存）
+reviews/SPEC_review.md           ← 正式参照先（state が読む）
+```
 
 ### 8.2 単独レビュー方式
 
@@ -476,7 +488,8 @@ project/
 
 ### 13.5 回答生成
 
-質問ファイルが存在する場合、回答担当AIが回答ファイルを生成する。
+質問ファイルが存在する場合、回答担当AI（Claude Code）が回答案を作成する。
+作成した回答案を人間が確認・承認した後、`qa/*_answers.md` として確定する。AIが仕様判断を自律確定することは禁止する。
 
 ### 13.6 改訂
 
@@ -557,6 +570,8 @@ project/
 - 起動時に `state/state.json` が存在しない場合
 - もしくは初期化要求が明示された場合
 
+起動時に `state/state.json` が存在し、かつ `workflow_version` フィールドが `WORKFLOW.md` のバージョンと一致しない場合は、警告ログを出力して `migrate_required: true` フラグを立てて停止する。自動再初期化は行わない（進行中の成果物状態の損失を防ぐため）。
+
 ### 16.2 補助ディレクトリの初期生成
 
 - `state/`
@@ -575,8 +590,10 @@ project/
 ### 16.4 初期値
 
 - `project_name`: ルートフォルダ名、または固定名
-- `current_artifact`: `SPEC.md`
-- `current_phase`: `spec`
+- `workflow_version`: `WORKFLOW.md` のバージョン文字列（例: `"0.3.1"`）
+- `current_artifact`: `SPEC.md`（自動進行判定の主キー）
+- `current_phase`: `spec`（補助表示用。自動進行判定には使用しない）
+  取りうる値: `spec` / `usecase` / `sequence` / `class` / `test` / `optional` / `implementation` / `testing` / `done`
 - `final_status`: `in_progress`
 - `blocking_issues`: 空配列
 - `human_decisions_pending`: 空配列
@@ -616,9 +633,11 @@ project/
 ```json
 {
   "project_name": "sample-project",
+  "workflow_version": "0.3.1",
   "current_artifact": "SPEC.md",
   "current_phase": "spec",
   "final_status": "in_progress",
+  "migrate_required": false,
   "review_execution_mode": "unknown",
   "artifact_order": [
     "SPEC.md",
@@ -715,19 +734,28 @@ project/
 
 ## 20. ログ出力要件
 
-すべての処理は `logs/workflow.log` に記録する。  
-最低限記録する内容は以下とする。
+すべての処理は `logs/workflow.log` に JSONL 形式（1行1イベント）で記録する。
 
-- 開始時刻
-- 対象成果物
-- 実行ステップ
-- 使用AIまたは実行コマンド
-- 出力ファイル
-- 判定結果
-- エラー内容
-- 次アクション
-- `EXECUTION_MODE`
-- 連携レビューか単独レビューかの別
+各エントリの最低限フィールドは以下とする。
+
+```json
+{
+  "timestamp": "ISO8601",
+  "artifact": "SPEC.md",
+  "step": "review",
+  "actor": "claude_code",
+  "command": "",
+  "output_file": "reviews/SPEC_review.md",
+  "status": "APPROVED",
+  "next_action": "start_next_artifact",
+  "execution_mode": "MODE_B",
+  "error": null
+}
+```
+
+- `actor`: `claude_code` / `codex_cli` / `human` のいずれか
+- `step`: `bootstrap` / `generate` / `review` / `extract_questions` / `generate_answers` / `revise` / `approve` / `implement` / `test` のいずれか
+- `error`: エラーがない場合は `null`
 
 ログは後から「なぜ止まったか」「どの回答で方針が変わったか」を追跡するために用いる。
 
@@ -738,6 +766,7 @@ project/
 ### 21.1 一時的エラー
 
 API 呼び出し失敗や CLI 実行失敗など、一時的なエラーは再試行対象とする。
+再試行は最大3回、指数バックオフで実施する。上限超過後は `blocked` に遷移し、`blocking_issues` にエラー内容を記録して停止する。
 
 ### 21.2 論理エラー
 
@@ -790,6 +819,8 @@ codex exec "SPEC.md をレビューし、曖昧点・不足・矛盾を列挙し
 ```bash
 codex exec --json "USECASE.md をレビューせよ"
 ```
+
+`--json` オプションの出力フォーマットは参考利用にとどめる。自動進行ループが次アクションを判定する際の正式な機械判定対象は、Section 11 の機械可読ブロック（`## Review Result` / `Status:` / `Blocking:` / `Next Action:`）のみとする。
 
 ### 24.3 連携レビュー時の注意
 
