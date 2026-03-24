@@ -303,3 +303,34 @@ Step 7 の生成トリガー条件を以下のいずれかを満たす場合に�
 
 以下の一文を Section 18 に追加する。
 「設計成果物間の進行では `Blocking: no` による例外進行を許容し得るが、実装フェーズへの進行条件には適用しない。実装開始前には、必須成果物および有効化された任意成果物がすべて `APPROVED` であることを要求する。」
+
+---
+
+## Q-A20 【High】`Blocking: no` で先送りした成果物をいつ再訪するか
+
+| 項目 | 内容 |
+|---|---|
+| **問題** | `NEEDS_ANSWER + Blocking: no + Next Action: start_next_artifact` を許容したことで、未承認の成果物を残したまま `current_artifact` が次へ進めるようになった。一方で `current_artifact` は単一値であり、Section 15 には先送りした成果物へ戻るトリガーや優先順位が定義されていない。このままだと実装フェーズ手前で「過去成果物が未承認のまま残って停止する」可能性がある。 |
+| **根拠** | WORKFLOW.md Section 3 原則1、Section 13.9、Section 15 Step 11、Section 18。 |
+| **なぜ推測で決めてはいけないか** | 先送り成果物の再訪規約がないと、自動進行ループ実装ごとに「最後にまとめて戻る」「質問ドラフト生成後に即戻る」「未承認成果物キューを持つ」など挙動が割れ、停止や取りこぼしが起きる。 |
+| **質問** | `Blocking: no` で先送りした成果物は、どのタイミングで `current_artifact` を戻して再レビュー・承認完了まで進めるか？未承認成果物キューを state に持つか、実装フェーズ直前に一括再訪するか、明示的に決めるか？ |
+
+**回答（確定）**: `Blocking: no` により後続へ進めた未承認成果物は、`deferred_artifacts` として `state/state.json` に明示的に記録し、通常の成果物列を最後まで進めた後、実装フェーズへ入る前に再訪・回収する。`Blocking: no` は「永久スキップ」ではなく「一時先送り」と定義する。
+
+追加ルール:
+
+1. `state` に `deferred_artifacts` を保持する。各要素の最低項目は以下とする。
+   - `artifact`
+   - `reason`
+   - `review_status`
+   - `blocking`
+   - `deferred_from_step`
+   - `required_before_implementation`
+2. 以下をすべて満たすとき、現在成果物を `deferred_artifacts` に追加して次成果物へ進んでよい。
+   - 最新レビュー結果が `NEEDS_ANSWER`
+   - `Blocking: no`
+   - `Next Action: start_next_artifact`
+   - 未解決事項が軽微で、後続成果物の生成を妨げない
+3. 自動進行ループは、通常の `artifact_order` を最後まで処理した後、`deferred_artifacts` が残っている場合は実装へ進まず、先送り成果物の再訪モードに入る。
+4. 再訪順序は原則として `artifact_order` の早いものからとする。再訪時はその成果物を `current_artifact` に戻し、質問解消、回答反映、改訂、再レビューを行い、`APPROVED` になったら `deferred_artifacts` から削除する。
+5. `deferred_artifacts` が1件でも残っている間は `start_implementation` へ進んではならない。実装開始条件は既存ルールどおり「必須成果物と有効化された任意成果物がすべて `APPROVED`」とする。

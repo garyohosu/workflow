@@ -4,7 +4,7 @@
 AI成果物レビュー駆動ワークフロー
 
 ## バージョン
-0.3.3
+0.3.4
 
 ## ステータス
 Draft
@@ -49,6 +49,7 @@ Draft
 1. **原則として承認されるまで次工程へ進まない**
    最新レビュー結果が `APPROVED` でない成果物は未完了とみなす。
    ただし、`NEEDS_ANSWER` であっても `Blocking: no` かつ `Next Action: start_next_artifact` の場合は、補足質問を後続で解消する前提で例外的に次工程へ進んでよい。
+   この例外進行は一時先送りを意味し、先送りした成果物は実装フェーズへ入る前に必ず再訪して `APPROVED` まで回収する。
 
 2. **不明点は必ず質問として分離する**  
    レビュー本文に埋め込まず、`qa/*_questions.md` に切り出す。
@@ -548,6 +549,7 @@ project/
 ### 13.9 次工程進行
 
 現在成果物が承認済み、または `NEEDS_ANSWER` であっても `Blocking: no` かつ `Next Action: start_next_artifact` の場合に、依存関係を満たす次の成果物へ進む。
+後者の場合、当該成果物は `deferred_artifacts` に登録し、一時先送りとして扱う。
 
 ---
 
@@ -561,6 +563,8 @@ project/
 - 最新レビュー結果が `APPROVED`、または `NEEDS_ANSWER` であっても `Blocking: no` かつ後続進行可と明示されている
 - 未解決質問が存在しない（または `Blocking: no` の軽微な質問のみである）
 - `state/state.json` に blocking issue がない
+
+`Blocking: no` による例外進行を行う場合は、当該成果物を `deferred_artifacts` に登録することを必須とする。
 
 ### 14.2 差し戻し条件
 
@@ -600,9 +604,11 @@ project/
 8. 回答ドラフトが存在し、`answer_approval_status` が `awaiting_human_approval` なら再生成せず承認待ちで停止する
 9. 人間が `answer_approval_status=approved` に更新したことを検知して `qa/*_answers.md` を確定（生成）し、未反映なら成果物を改訂する。確定後は `status=answers_completed` とする。
 10. 改訂済みなら再レビューする
-11. 最新レビュー結果が `APPROVED`、または `Blocking: no` かつ `Next Action: start_next_artifact` の場合は次成果物へ進む
-12. 必須成果物と有効化された任意成果物が承認済みなら実装フェーズへ進む
-13. 実装・テスト完了後、`final_status` を `done` に更新する
+11. 最新レビュー結果が `APPROVED` の場合は次成果物へ進む
+12. 最新レビュー結果が `NEEDS_ANSWER` かつ `Blocking: no` かつ `Next Action: start_next_artifact` の場合は、当該成果物を `deferred_artifacts` に登録して次成果物へ進む
+13. `artifact_order` 上の成果物をすべて処理済みで、`deferred_artifacts` が残っている場合は、実装フェーズへ進まず、`artifact_order` の早いものから再訪対象として `current_artifact` に再設定する
+14. `deferred_artifacts` が空であり、必須成果物と有効化された任意成果物が承認済みなら実装フェーズへ進む
+15. 実装・テスト完了後、`final_status` を `done` に更新する
 
 ---
 
@@ -635,12 +641,13 @@ project/
 ### 16.4 初期値
 
 - `project_name`: ルートフォルダ名、または固定名
-- `workflow_version`: `WORKFLOW.md` のバージョン文字列（例: `"0.3.1"`）
+- `workflow_version`: `WORKFLOW.md` のバージョン文字列（例: `"0.3.4"`）
 - `current_artifact`: `SPEC.md`（自動進行判定の主キー）
 - `current_phase`: `spec`（補助表示用。自動進行判定には使用しない）
   取りうる値: `spec` / `usecase` / `sequence` / `class` / `test` / `optional` / `implementation` / `testing` / `done`
 - `final_status`: `in_progress`
 - `blocking_issues`: 空配列
+- `deferred_artifacts`: 空配列
 - `human_decisions_pending`: 空配列
 - `next_action`: `generate_artifact`（`current_artifact` と組み合わせて解釈する。`generate_spec` などの成果物固有値は使用しない）
 - `artifact_order`: 成果物定義セクション、または標準定義に従う
@@ -684,7 +691,7 @@ project/
 ```json
 {
   "project_name": "sample-project",
-  "workflow_version": "0.3.3",
+  "workflow_version": "0.3.4",
   "current_artifact": "SPEC.md",
   "current_phase": "spec",
   "final_status": "in_progress",
@@ -765,6 +772,7 @@ project/
     }
   },
   "blocking_issues": [],
+  "deferred_artifacts": [],
   "human_decisions_pending": [],
   "next_action": "generate_artifact"
 }
@@ -786,6 +794,7 @@ project/
 - `artifact_order` に含まれる任意成果物がある場合、それらも承認済み
 
 設計成果物間の進行では `Blocking: no` による例外進行を許容し得るが、実装フェーズへの進行条件には適用しない。実装開始前には、必須成果物および有効化された任意成果物がすべて `APPROVED` であることを要求する。
+`deferred_artifacts` が1件でも残っている間は `start_implementation` へ進んではならず、先送り成果物を再訪して解消することを必須とする。
 
 ---
 
