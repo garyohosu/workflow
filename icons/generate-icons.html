@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="UTF-8"><title>Icon Generator</title></head>
+<body>
+<p>アイコンを自動生成してダウンロードします...</p>
+<script>
+function makeIcon(size) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#4caf50';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, size, size, size * 0.2);
+  ctx.fill();
+
+  // テキスト
+  ctx.fillStyle = 'white';
+  ctx.font = `bold ${size * 0.55}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('買', size / 2, size / 2);
+
+  // ダウンロード
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = `icon-${size}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// 少し間を置いて両方生成
+makeIcon(192);
+setTimeout(() => makeIcon(512), 800);
+</script>
+<p>ダウンロードした <code>icon-192.png</code> と <code>icon-512.png</code> を <code>icons/</code> フォルダに配置してください。</p>
+</body>
+</html>

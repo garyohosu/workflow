@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>買い物メモ</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#4caf50">
+</head>
+<body>
+  <div class="container">
+    <h1>買い物メモ</h1>
+
+    <div class="input-row">
+      <input type="text" id="item-input" placeholder="買うものを入力" maxlength="100" autocomplete="off">
+      <button id="add-btn">追加</button>
+    </div>
+    <p id="error-msg" hidden></p>
+
+    <section>
+      <h2>未購入</h2>
+      <ul id="unchecked-list"></ul>
+    </section>
+
+    <section>
+      <h2>購入済み</h2>
+      <ul id="checked-list"></ul>
+      <button id="expand-btn" hidden>・・・</button>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

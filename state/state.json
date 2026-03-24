@@ -1,0 +1,24 @@
+{
+  "project_name": "workflow",
+  "workflow_version": "0.4.0",
+  "run_mode": "rough_auto",
+  "current_artifact": "TEST.md",
+  "artifact_order": ["SPEC.md", "USECASE.md", "SEQUENCE.md", "CLASS.md", "TEST.md"],
+  "next_action": "done",
+  "final_status": "done",
+  "review_status": "APPROVED",
+  "deferred_artifacts": [],
+  "revision_count": 0,
+  "steps_executed": 6,
+  "artifacts": {
+    "SPEC.md":     { "status": "approved", "revision_count": 2 },
+    "USECASE.md":  { "status": "approved", "revision_count": 0 },
+    "SEQUENCE.md": { "status": "approved", "revision_count": 0 },
+    "CLASS.md":    { "status": "approved", "revision_count": 0 },
+    "TEST.md":     { "status": "approved", "revision_count": 0 }
+  },
+  "implementation": {
+    "status": "done",
+    "test_result": "12/12 passed"
+  }
+}
