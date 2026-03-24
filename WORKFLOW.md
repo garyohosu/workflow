@@ -156,7 +156,7 @@ AIが仕様判断を自律確定することは禁止する（原則6）。MODE_
 3. `SEQUENCE.md`
 4. `CLASS.md`
 5. `TEST.md`
-6. 任意成果物（例: `IMPLEMENTATION_PLAN.md`, `API.md`）
+6. 任意成果物（例: `IMPLEMENTATION_PLAN.md`）
 7. 実装
 8. 実装レビュー
 9. テスト実行
@@ -204,7 +204,10 @@ artifacts:
 - `drafted` 初版が作成された状態。
 - `reviewed` レビュー報告が作成された状態。
 - `questions_pending` 未回答質問が存在する状態。
+- `answers_draft_generated` 回答案ドラフトが生成済みの状態。
+- `awaiting_answer_approval` 人間の回答承認待ち状態。
 - `answers_completed` 質問への回答が作成済みの状態（人間承認済み）。
+- `needs_answer_revision` 回答案ドラフトが却下され、再作成が必要な状態。
 - `revised` 回答を反映して成果物を改訂した状態。
 - `approved` 最新レビュー結果が `APPROVED` の状態。
 - `blocked` 人間判断待ち、依存不足、重大矛盾などにより進行不能な状態。
@@ -389,6 +392,23 @@ Next Action: answer_questions
 
 この形式により、ワークフロー制御側は自由文全体を解釈せずとも、次アクションを安定して判定できる。
 
+`Blocking:` は、次工程への自動進行を停止すべきかどうかを表す機械判定フラグとする。
+
+- `Blocking: yes` 次工程へ進んではならない。人間回答、仕様確定、または重大修正が完了するまで停止する。
+- `Blocking: no` 課題や質問はあるが、次工程に進める。必要に応じて後続で解消してよい。
+
+Status との推奨組み合わせは以下のとおりとする。
+
+- `APPROVED + Blocking: no` 正常進行
+- `APPROVED + Blocking: yes` 原則禁止
+- `NEEDS_REVISION + Blocking: yes` 修正完了まで停止
+- `NEEDS_REVISION + Blocking: no` 軽微修正では許容し得るが、通常は避ける
+- `NEEDS_ANSWER + Blocking: yes` 未回答の重要質問があるため停止
+- `NEEDS_ANSWER + Blocking: no` 補足質問のみ。後続へ進行可
+- `BLOCKED + Blocking: yes` 停止
+
+運用上は、High の未回答質問が1件でもある場合は原則 `Blocking: yes` とし、Medium / Low のみで仕様確定に直結しない場合は `Blocking: no` を許容する。
+
 ### 11.1 観点別レビュー出力の推奨形式
 
 複数視点レビューを行う場合、観点別レポートは以下の情報を含むことを推奨する。
@@ -488,8 +508,8 @@ project/
 
 ### 13.5 回答生成
 
-質問ファイルが存在する場合、回答担当AI（Claude Code）が回答案を作成する。
-作成した回答案を人間が確認・承認した後、`qa/*_answers.md` として確定する。AIが仕様判断を自律確定することは禁止する。
+質問ファイルが存在する場合、回答担当AI（Claude Code）が回答案を `qa/*_answers_draft.md` として作成する。
+作成した回答案を人間が確認・承認した後にのみ、`qa/*_answers.md` を確定版として生成する。AIが仕様判断を自律確定することは禁止する。
 
 ### 13.6 改訂
 
@@ -552,12 +572,13 @@ project/
 4. `current_artifact` を取得する
 5. 対象成果物が未作成なら生成する
 6. レビュー報告が未作成ならレビューする
-7. 質問ファイルがあり、回答ファイルがなければ回答生成する
-8. 回答ファイルがあり、未反映なら成果物を改訂する
-9. 改訂済みなら再レビューする
-10. 最新レビュー結果が `APPROVED` なら次成果物へ進む
-11. 必須成果物と有効化された任意成果物が承認済みなら実装フェーズへ進む
-12. 実装・テスト完了後、`final_status` を `done` に更新する
+7. 質問ファイルがあり、回答ドラフトが未生成なら `qa/*_answers_draft.md` を生成する
+8. 回答ドラフトが存在し、`answer_approval_status` が `awaiting_human_approval` なら再生成せず承認待ちで停止する
+9. 人間承認後に `qa/*_answers.md` を確定し、未反映なら成果物を改訂する
+10. 改訂済みなら再レビューする
+11. 最新レビュー結果が `APPROVED` なら次成果物へ進む
+12. 必須成果物と有効化された任意成果物が承認済みなら実装フェーズへ進む
+13. 実装・テスト完了後、`final_status` を `done` に更新する
 
 ---
 
@@ -610,7 +631,10 @@ project/
 - `review_status`: `null`
 - `review_file`: 規約パスを設定
 - `questions_file`: 規約パスを設定
+- `answers_draft_file`: 規約パスを設定
 - `answers_file`: 規約パスを設定
+- `answer_approval_status`: `none`
+- `pending_question_set`: `null`
 - `revision_count`: `0`
 - `approved`: `false`
 
@@ -622,6 +646,7 @@ project/
 
 - `reviews/SPEC_review.md`
 - `qa/SPEC_questions.md`
+- `qa/SPEC_answers_draft.md`
 - `qa/SPEC_answers.md`
 
 ---
@@ -653,7 +678,10 @@ project/
       "review_status": null,
       "review_file": "reviews/SPEC_review.md",
       "questions_file": "qa/SPEC_questions.md",
+      "answers_draft_file": "qa/SPEC_answers_draft.md",
       "answers_file": "qa/SPEC_answers.md",
+      "answer_approval_status": "none",
+      "pending_question_set": null,
       "revision_count": 0,
       "approved": false
     },
@@ -663,7 +691,10 @@ project/
       "review_status": null,
       "review_file": "reviews/USECASE_review.md",
       "questions_file": "qa/USECASE_questions.md",
+      "answers_draft_file": "qa/USECASE_answers_draft.md",
       "answers_file": "qa/USECASE_answers.md",
+      "answer_approval_status": "none",
+      "pending_question_set": null,
       "revision_count": 0,
       "approved": false
     },
@@ -673,7 +704,10 @@ project/
       "review_status": null,
       "review_file": "reviews/SEQUENCE_review.md",
       "questions_file": "qa/SEQUENCE_questions.md",
+      "answers_draft_file": "qa/SEQUENCE_answers_draft.md",
       "answers_file": "qa/SEQUENCE_answers.md",
+      "answer_approval_status": "none",
+      "pending_question_set": null,
       "revision_count": 0,
       "approved": false
     },
@@ -683,7 +717,10 @@ project/
       "review_status": null,
       "review_file": "reviews/CLASS_review.md",
       "questions_file": "qa/CLASS_questions.md",
+      "answers_draft_file": "qa/CLASS_answers_draft.md",
       "answers_file": "qa/CLASS_answers.md",
+      "answer_approval_status": "none",
+      "pending_question_set": null,
       "revision_count": 0,
       "approved": false
     },
@@ -693,7 +730,10 @@ project/
       "review_status": null,
       "review_file": "reviews/TEST_review.md",
       "questions_file": "qa/TEST_questions.md",
+      "answers_draft_file": "qa/TEST_answers_draft.md",
       "answers_file": "qa/TEST_answers.md",
+      "answer_approval_status": "none",
+      "pending_question_set": null,
       "revision_count": 0,
       "approved": false
     }

@@ -125,3 +125,64 @@ AIが仕様判断を自律確定することは原則6（「AIは推測で仕様
 
 **回答（確定）**: `codex exec --json` の出力詳細フォーマットには依存しない。正式な機械判定は Section 11 の機械可読ブロック（`## Review Result` / `Status:` / `Blocking:` / `Next Action:`）のみを対象とする旨を明記する。`--json` オプションは参考利用にとどめる。
 
+---
+
+## 追加レビュー質問（確定回答）
+
+## Q-A11 【High】人間承認待ちの回答案をどこに保持するか
+
+**質問**: AI は回答案を作るが `qa/*_answers.md` は人間承認後にしか確定できない、という運用になった。  
+このとき承認前のドラフトはどこに保存するか？また、承認待ち状態を `state/state.json` のどのフィールドで表現するか？
+
+**回答（確定）**: 承認前の回答案は `qa/*_answers_draft.md` に保存し、承認後にのみ `qa/*_answers.md` を確定版として生成する。  
+`state/state.json` には `answers_draft_file` と `answer_approval_status` を追加する。
+
+追加フィールド:
+
+- `answers_draft_file`: 承認前ドラフトへのパス
+- `answers_file`: 承認済み確定版へのパス
+- `answer_approval_status`: `none | draft_generated | awaiting_human_approval | approved | rejected`
+- `pending_question_set`: 対応する質問ファイルまたはレビューID
+
+状態遷移:
+
+- `reviewed → answers_draft_generated`
+- `answers_draft_generated → awaiting_answer_approval`
+- `awaiting_answer_approval → answers_completed`
+- `awaiting_answer_approval → needs_answer_revision`
+
+自動進行ループ規約:
+
+- `answers_file` がなくても、`answers_draft_file` が存在し `answer_approval_status=awaiting_human_approval` の場合は再生成しない
+- 人間承認後にのみ `answers_file` を正式採用する
+- 却下時は既存ドラフトを上書きせず、改訂版ドラフトを新規生成してもよい
+
+---
+
+## Q-A12 【Medium】`Blocking:` フィールドの意味と判定規約
+
+**質問**: Section 11 の機械判定対象に `Blocking:` を含めるなら、`yes` / `no` の意味を明文化するか？  
+特に `Status: NEEDS_ANSWER` と `Blocking:` の組み合わせをどう扱うかを固定するか？
+
+**回答（確定）**: `Blocking:` は、その結果が次工程への自動進行を停止すべきかどうかを表す機械判定フラグとする。
+
+意味:
+
+- `Blocking: yes`: 次工程へ進んではならない。人間回答、仕様確定、または重大修正が完了するまで停止する
+- `Blocking: no`: 課題や質問はあるが、次工程に進める。必要に応じて後続で解消してよい
+
+Status との組み合わせ規約:
+
+- `APPROVED + Blocking: no`: 正常進行
+- `APPROVED + Blocking: yes`: 原則禁止
+- `NEEDS_REVISION + Blocking: yes`: 修正完了まで停止
+- `NEEDS_REVISION + Blocking: no`: 軽微修正なら継続可だが、通常はこの組み合わせを避ける
+- `NEEDS_ANSWER + Blocking: yes`: 未回答の重要質問があるため停止
+- `NEEDS_ANSWER + Blocking: no`: 補足質問のみ。後続へ進行可
+- `BLOCKED + Blocking: yes`: 停止
+
+推奨ルール:
+
+- High の未回答質問が1件でもある場合は原則 `Blocking: yes`
+- Medium / Low のみで、かつ仕様確定に直結しない場合は `Blocking: no`
+- 自動進行ループは `Blocking: yes` を見たら `blocked` へ遷移し、`blocking_issues` に記録する
