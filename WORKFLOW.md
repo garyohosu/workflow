@@ -4,7 +4,7 @@
 AI成果物レビュー駆動ワークフロー
 
 ## バージョン
-0.3.4
+0.3.5
 
 ## ステータス
 Draft
@@ -63,8 +63,9 @@ Draft
 5. **状態は機械可読に管理する**  
    現在地、未解決事項、次アクションは `state/state.json` で管理する。
 
-6. **AI は推測で仕様を確定しすぎない**  
-   不足情報がある場合は質問として切り出し、勝手に埋めて進めない。
+6. **AI は High の未確定事項を推測で確定しない**
+   High の不足情報がある場合は質問として切り出し、勝手に埋めて進めない。
+   Medium / Low は原則11に従い AI 仮定で解決してよい。
 
 7. **`state/state.json` が存在しない場合は `WORKFLOW.md` から初期生成する**  
    起動時に `state/state.json` が無ければ、ブートストラップ処理を行う。
@@ -76,8 +77,13 @@ Draft
 9. **レビュー指摘は必ず採否判定を通す**  
    レビュー結果をそのまま全採用せず、採用・保留・却下を明示する。
 
-10. **好みより要件整合性を優先する**  
+10. **好みより要件整合性を優先する**
     レビューでは文体上の好みよりも、矛盾・未定義・運用不能・安全性・自動化困難性を優先して扱う。
+
+11. **Non-blocking な未確定事項は AI が仮定を置いて先に進む**
+    `Blocking: no` と判定された質問（Medium / Low のみ）は、AI が合理的な仮定を置き `qa/*_answers.md` に記録して `revise_artifact` へ直接進んでよい。
+    仮定の内容は LOG.md に `AI-ASSUMPTION:` プレフィックスで記録する。仮定が後で覆された場合は `revise_artifact` でやり直す。
+    `await_human_answer_approval` へ進むのは `Blocking: yes`（High 質問あり）の場合のみとする。
 
 ---
 
@@ -424,7 +430,8 @@ Status との推奨組み合わせは以下のとおりとする。
 - `NEEDS_ANSWER + Blocking: no` 補足質問のみ。後続へ進行可（次工程への進行条件 14.1 参照）
 - `BLOCKED + Blocking: yes` 停止
 
-運用上は、High の未回答質問が1件でもある場合は原則 `Blocking: yes` とし、Medium / Low のみで仕様確定に直結しない場合は `Blocking: no` を許容する。
+運用上は、High の未回答質問が1件でもある場合は原則 `Blocking: yes` とし、Medium / Low のみの場合は `Blocking: no` とする。
+`Blocking: no` の NEEDS_ANSWER は AI 仮定フロー（Section 13.5 パスB）で解決し、人間承認を待たずに `revise_artifact` へ進む。
 
 ### 11.2 観点別レビュー出力の推奨形式
 
@@ -530,8 +537,17 @@ project/
 
 ### 13.5 回答生成
 
-質問ファイルが存在する場合、回答担当AI（Claude Code）が回答案を `qa/*_answers_draft.md` として作成する。
-作成した回答案を人間が確認・承認した後にのみ、`qa/*_answers.md` を確定版として生成する。AIが仕様判断を自律確定することは禁止する。
+質問ファイルが存在する場合、Blocking 判定に応じて以下の2パスに分岐する。
+
+**パス A: Blocking: yes（High 質問あり）— 人間承認フロー**
+回答担当 AI（Claude Code）が回答案を `qa/*_answers_draft.md` として作成する。
+作成した回答案を人間が確認・承認した後にのみ、`qa/*_answers.md` を確定版として生成する。
+AI が High の仕様判断を自律確定することは禁止する。
+
+**パス B: Blocking: no（Medium / Low のみ）— AI 仮定フロー**
+AI が合理的な仮定を置き、`qa/*_answers.md` に仮定内容を直接記録して確定する。
+`qa/*_answers_draft.md` の生成と人間承認のステップを省略し、`revise_artifact` へ直接進む。
+仮定の根拠と内容は LOG.md に `AI-ASSUMPTION:` プレフィックスで記録する。
 
 ### 13.6 改訂
 
@@ -597,12 +613,11 @@ project/
 4. `current_artifact` を取得する
 5. 対象成果物が未作成なら生成する
 6. レビュー報告が未作成ならレビューする
-7. 質問ファイルがあり、以下のいずれかを満たす場合は `qa/*_answers_draft.md` を生成または上書き再生成する。生成後は `status=answers_draft_generated`、`answer_approval_status=awaiting_human_approval` とする。
-   - `answers_draft_file` が未存在
-   - `answer_approval_status == rejected`
-   - `status == needs_answer_revision`
-8. 回答ドラフトが存在し、`answer_approval_status` が `awaiting_human_approval` なら再生成せず承認待ちで停止する
-9. 人間が `answer_approval_status=approved` に更新したことを検知して `qa/*_answers.md` を確定（生成）し、未反映なら成果物を改訂する。確定後は `status=answers_completed` とする。
+7. 質問ファイルがあり、回答が未完了な場合は Blocking 判定で分岐する。
+   - **Blocking: yes**（High 質問あり）: `qa/*_answers_draft.md` を生成または上書き再生成する（`answer_approval_status == rejected` または `status == needs_answer_revision` の場合も含む）。生成後は `status=answers_draft_generated`、`answer_approval_status=awaiting_human_approval` とする。
+   - **Blocking: no**（Medium / Low のみ）: AI が仮定を置き LOG.md に `AI-ASSUMPTION:` で記録したうえで `qa/*_answers.md` を直接生成し、Step 10 へ進む。`answers_draft_file` の生成と人間承認は省略する。
+8. （Blocking: yes のみ）回答ドラフトが存在し `answer_approval_status=awaiting_human_approval` なら再生成せず承認待ちで停止する。
+9. （Blocking: yes のみ）人間が `answer_approval_status=approved` に更新したことを検知して `qa/*_answers.md` を確定（生成）し、`status=answers_completed` とする。
 10. 改訂済みなら再レビューする
 11. 最新レビュー結果が `APPROVED` の場合は次成果物へ進む
 12. 最新レビュー結果が `NEEDS_ANSWER` かつ `Blocking: no` かつ `Next Action: start_next_artifact` の場合は、当該成果物を `deferred_artifacts` に登録して次成果物へ進む
@@ -691,7 +706,7 @@ project/
 ```json
 {
   "project_name": "sample-project",
-  "workflow_version": "0.3.4",
+  "workflow_version": "0.3.5",
   "current_artifact": "SPEC.md",
   "current_phase": "spec",
   "final_status": "in_progress",

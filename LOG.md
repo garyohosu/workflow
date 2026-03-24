@@ -1,6 +1,6 @@
 # LOG.md
 
-WORKFLOW.md (v0.3.4) 実行ログ
+WORKFLOW.md (v0.3.5) 実行ログ
 
 ---
 
@@ -58,7 +58,48 @@ Next Action: answer_questions
 | Q-SPEC-01 | Medium | 削除機能（未購入品の削除・購入済み品の削除）は本バージョンのスコープ外か？ |
 | Q-SPEC-02 | Medium | 購入済み解除時に `checkedAt` を null にリセットするか？ |
 
+### 次のアクション（当時）
+
+セッション3 にて WORKFLOW.md v0.3.5 の新ルールにより AI 仮定フロー（パスB）で処理済み。
+
+---
+
+## セッション3: WORKFLOW.md v0.3.5 改訂 + AI 仮定フロー適用
+
+### WORKFLOW.md 改訂内容（v0.3.4 → v0.3.5）
+
+| 変更 | 内容 |
+|------|------|
+| 原則11 追加 | Non-blocking（Medium/Low）は AI 仮定で先に進む |
+| 原則6 修正 | High のみ自律確定禁止に緩和 |
+| Section 13.5 | Blocking: yes/no の2パスに分割（パスA: 人間承認、パスB: AI仮定） |
+| Section 15 Step 7-9 | Blocking 判定で分岐。Blocking: no は人間承認省略 |
+| Section 11.1 | Blocking: no の NEEDS_ANSWER は AI 仮定フローで処理すると明記 |
+
+### AI 仮定フロー実行（パスB: Blocking: no）
+
+セッション2 の SPEC.md レビュー結果（Q-SPEC-01/02、ともに Medium）を新ルールで再処理した。
+
+**AI-ASSUMPTION: Q-SPEC-01**
+削除機能（未購入品の個別削除・購入済み品の削除）は本バージョンのスコープ外とする。
+根拠: 将来拡張案（Section 17）に列挙済みであり、初期リリースをシンプルに保つ方針と整合する。
+反映: SPEC.md Section 4.2 に削除機能2件を「含まないもの」として追加した。
+
+**AI-ASSUMPTION: Q-SPEC-02**
+購入済みを解除した場合、`checkedAt` を null にリセットする。
+根拠: `checkedAt` は「現在の購入状態に紐づく日時」であり、未購入に戻れば購入日時は消えるのが自然。
+反映: SPEC.md Section 8.4 および Section 10 に明記した。
+
+また Arbiter 採用済みの RA-04（文字数「程度」→「100文字」）も同時に反映した。
+
+### 生成・更新ファイル
+
+- `WORKFLOW.md`: v0.3.5
+- `qa/SPEC_answers.md`: AI 仮定内容を記録（パスB）
+- `SPEC.md`: Section 4.2、8.4、10 を改訂（revision_count: 1）
+- `state/state.json`: status=revised、next_action=re_review、blocking_issues=[]
+
 ### 次のアクション
 
-`qa/SPEC_questions.md` の Q-SPEC-01・Q-SPEC-02 に対して回答案を作成し、人間が承認後に `qa/SPEC_answers.md` を確定する。
+SPEC.md の再レビュー（`re_review`）を実施する。
 

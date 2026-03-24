@@ -1,12 +1,12 @@
 {
   "project_name": "workflow",
-  "workflow_version": "0.3.4",
+  "workflow_version": "0.3.5",
   "current_artifact": "SPEC.md",
   "current_phase": "spec",
   "final_status": "in_progress",
   "migrate_required": false,
   "review_execution_mode": "MODE_B",
-  "next_action": "await_human_answer_approval",
+  "next_action": "re_review",
   "artifact_order": [
     "SPEC.md",
     "USECASE.md",
@@ -18,15 +18,15 @@
   "artifacts": {
     "SPEC.md": {
       "required": true,
-      "status": "questions_pending",
+      "status": "revised",
       "review_status": "NEEDS_ANSWER",
       "review_file": "reviews/SPEC_review.md",
       "questions_file": "qa/SPEC_questions.md",
       "answers_draft_file": "qa/SPEC_answers_draft.md",
       "answers_file": "qa/SPEC_answers.md",
-      "answer_approval_status": "none",
-      "pending_question_set": "qa/SPEC_questions.md",
-      "revision_count": 0,
+      "answer_approval_status": "ai_assumed",
+      "pending_question_set": null,
+      "revision_count": 1,
       "approved": false
     },
     "USECASE.md": {
@@ -95,12 +95,7 @@
       "approved": false
     }
   },
-  "blocking_issues": [
-    "SPEC.md: NEEDS_ANSWER (Blocking: yes) — qa/SPEC_questions.md への回答が必要"
-  ],
+  "blocking_issues": [],
   "deferred_artifacts": [],
-  "human_decisions_pending": [
-    "Q-SPEC-01: 削除機能は本バージョンのスコープ外か？",
-    "Q-SPEC-02: 購入済み解除時に checkedAt を null にリセットするか？"
-  ]
+  "human_decisions_pending": []
 }
